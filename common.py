@@ -35,7 +35,18 @@ def setup_analyzer_path():
 
 
 def require_password():
-    """비밀번호 인증. 통과 시 True 반환, 미통과 시 페이지 정지."""
+    """비밀번호 인증. 통과 시 True 반환, 미통과 시 페이지 정지.
+
+    secrets.toml에 `skip_password = true` 설정 시 인증 우회 (개발 편의).
+    """
+    # DEV 우회 — secrets.toml에 skip_password = true 일 때만
+    try:
+        if st.secrets.get("skip_password"):
+            st.session_state["authenticated"] = True
+            return True
+    except Exception:
+        pass
+
     if st.session_state.get("authenticated"):
         return True
 

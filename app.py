@@ -183,13 +183,12 @@ with col_right:
     weights = pd.DataFrame([
         {"종목": s["name"], "평가금액": s["eval_amount"]}
         for s in per_stock
-    ])
+    ]).sort_values("평가금액", ascending=False).reset_index(drop=True)
+
     if not weights.empty:
-        # Streamlit native 파이차트 대신 matplotlib
         import matplotlib.pyplot as plt
         from matplotlib import font_manager
 
-        # 한글 폰트
         for fn in ["Malgun Gothic", "NanumGothic", "AppleGothic"]:
             try:
                 if any(f.name == fn for f in font_manager.fontManager.ttflist):
@@ -200,15 +199,37 @@ with col_right:
 
         fig, ax = plt.subplots(figsize=(5, 5))
         colors = plt.cm.Pastel1(range(len(weights)))
-        ax.pie(
+        total = weights["평가금액"].sum()
+
+        # 작은 조각(<5%)은 라벨/% 표시 안 함 → 겹침 방지
+        def _autopct(pct):
+            return f"{pct:.1f}%" if pct >= 5.0 else ""
+
+        labels_for_pie = [
+            name if (val / total * 100) >= 5.0 else ""
+            for name, val in zip(weights["종목"], weights["평가금액"])
+        ]
+
+        wedges, texts, autotexts = ax.pie(
             weights["평가금액"],
-            labels=weights["종목"],
-            autopct="%1.1f%%",
+            labels=labels_for_pie,
+            autopct=_autopct,
             startangle=90,
             colors=colors,
             textprops={"fontsize": 10},
+            pctdistance=0.75,
+            labeldistance=1.1,
         )
         ax.axis("equal")
+
+        # 작은 비중 종목은 범례에 모두 표시
+        legend_labels = [
+            f"{name}  {val/total*100:.1f}%"
+            for name, val in zip(weights["종목"], weights["평가금액"])
+        ]
+        ax.legend(wedges, legend_labels, title=t("portfolio_weight"),
+                  loc="center left", bbox_to_anchor=(1.0, 0.5), fontsize=9)
+
         st.pyplot(fig)
         plt.close(fig)
 

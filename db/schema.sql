@@ -66,6 +66,15 @@ CREATE INDEX IF NOT EXISTS idx_history_code_date ON analysis_history(stock_code,
 ALTER TABLE analysis_history ADD COLUMN IF NOT EXISTS snapshot_type TEXT DEFAULT 'manual';
 CREATE INDEX IF NOT EXISTS idx_history_snapshot_type ON analysis_history(snapshot_type, analyzed_at DESC);
 
+-- 일일 1건 제약 (같은 날 같은 종목+타입은 덮어쓰기)
+ALTER TABLE analysis_history ADD COLUMN IF NOT EXISTS analyzed_date DATE;
+UPDATE analysis_history SET analyzed_date = analyzed_at::date WHERE analyzed_date IS NULL;
+ALTER TABLE analysis_history ALTER COLUMN analyzed_date SET NOT NULL;
+-- DELETE duplicates manually before adding constraint
+ALTER TABLE analysis_history DROP CONSTRAINT IF EXISTS analysis_history_unique_per_day;
+ALTER TABLE analysis_history ADD CONSTRAINT analysis_history_unique_per_day
+    UNIQUE (stock_code, analyzed_date, snapshot_type);
+
 -- updated_at 자동 갱신 트리거 (holdings용)
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$

@@ -127,7 +127,8 @@ def save_analysis(
     swings: Optional[dict] = None,
     snapshot_type: str = "manual",  # 'manual' or 'scheduled'
 ) -> dict:
-    """분석 결과를 히스토리에 저장."""
+    """분석 결과를 히스토리에 저장 (같은 날 같은 종목+타입은 덮어쓰기)."""
+    from datetime import date as _date
     client = get_client()
     if not client:
         return {}
@@ -136,6 +137,7 @@ def save_analysis(
         "stock_code": stock_code,
         "stock_name": stock_name,
         "snapshot_type": snapshot_type,
+        "analyzed_date": _date.today().isoformat(),
         "price": _safe_num(technical.get("current_price")),
         "rsi_14": _safe_num(technical.get("rsi_14")),
         "macd": _safe_num(technical.get("macd")),
@@ -157,7 +159,10 @@ def save_analysis(
             "swings": _json_safe(swings) if swings else None,
         },
     }
-    res = client.table("analysis_history").insert(record).execute()
+    # 같은 날짜+종목+타입 중복 시 UPDATE (UNIQUE 제약 활용)
+    res = client.table("analysis_history").upsert(
+        record, on_conflict="stock_code,analyzed_date,snapshot_type"
+    ).execute()
     return res.data[0] if res.data else {}
 
 
