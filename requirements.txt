@@ -1,5 +1,8 @@
-streamlit
-pandas
+setuptools>=68
+wheel
+pip>=24
+streamlit>=1.30
+pandas>=2.0
 numpy
 matplotlib
 mplfinance
@@ -9,4 +12,4 @@ python-dotenv
 requests
 beautifulsoup4
 lxml
-supabase
+supabase>=2.0
