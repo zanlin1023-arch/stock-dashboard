@@ -1,0 +1,30 @@
+# Secrets
+config/.env
+.env
+.streamlit/secrets.toml
+
+# Reports (generated)
+reports/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cache
+cache/
+*.cache
