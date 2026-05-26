@@ -116,25 +116,39 @@ fdr.StockListing("KRX")
 
 ---
 
-### 5. **"Error installing requirements"** (가장 중요 — 반복 발생)
+### 5. **"Error installing requirements"** — 진짜 원인은 packages.txt
 
-**증상**: 모든 패키지 인스톨 단계에서 그냥 빨간 에러 페이지.
+**증상**: 빌드 화면에 그냥 "Error installing requirements" 빨간 페이지.
 
-**원인** (git diff 분석으로 발견):
-- "도와주려고" 추가한 패키지가 오히려 의존성 해결사를 깨뜨림
+**진짜 원인** (로그 보고 확정):
+```
+Package fonts-nanum-coding is not available
+E: Package 'fonts-nanum-coding' has no installation candidate
+[xx:xx:xx] ❗️ installer returned a non-zero exit code
+```
+
+→ **`packages.txt`의 `fonts-nanum-coding` 패키지가 Debian trixie에 없음**.
+- Streamlit Cloud는 Debian trixie 사용
+- 한글 폰트 패키지 일부는 bullseye에만 있고 trixie엔 없음
+- apt 실패 시 빌드 전체가 "Error installing requirements"로 표시 (헷갈리는 메시지!)
+
+**해결**:
+- ✅ `packages.txt`에서 `fonts-nanum-coding` 제거
+- ✅ `fonts-nanum` + `fontconfig`만 유지 (이것만으로 한글 충분)
 
 **❌ 절대 하지 말 것**:
 | 추가했던 것 | 왜 문제 |
 |---|---|
-| `setuptools>=68` | Streamlit Cloud는 자체 setuptools 사용 — pin 충돌 |
-| `wheel` | 자동 제공 — 명시하면 버전 충돌 가능 |
+| `fonts-nanum-coding` (packages.txt) | Debian trixie에서 미지원 |
+| `setuptools>=68` | Streamlit Cloud는 자체 setuptools 사용 — pin 충돌 가능 |
+| `wheel` 명시 | 자동 제공, 명시하면 버전 충돌 가능 |
 | `pip>=24` | Streamlit Cloud는 자체 pip — manifest로 pin하면 fail |
 | 버전 strict pin (`streamlit>=1.30`) | 일부 환경에서 dep solver 충돌 |
 
-**해결**:
-- ✅ requirements.txt를 **마지막 검증된 commit (`1a71b19`)으로 되돌리기**
-- ✅ 패키지명만 적고 버전 명시는 최소화
-- 💡 git diff로 "마지막 성공 commit"과 비교하는 게 가장 빠른 진단
+**디버깅 교훈**:
+- "Error installing requirements" = requirements.txt 문제가 아닐 수 있음
+- **packages.txt 의 apt 설치 실패**도 같은 메시지로 표시됨!
+- 항상 로그 확인 필수 (Streamlit Cloud → 앱 페이지 → 우하단 Manage app)
 
 ---
 
