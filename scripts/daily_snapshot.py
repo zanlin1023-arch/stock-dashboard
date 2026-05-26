@@ -94,10 +94,32 @@ def run_snapshot() -> dict:
                 if col in df.columns and df[col].notna().any():
                     tech_for_db[col] = float(df[col].iloc[-1])
 
+            # 시간 사이클 + 미래 추세 + 수급 (DB 누적 분석용)
+            from chart_ichimoku import compute_time_cycles, project_future_path
+            cycles = compute_time_cycles(swings["C"]["idx"], len(df))
+            future_path = project_future_path(
+                decision["price"], cycles, targets, decision.get("stop"),
+            )
+            flow_data = None
+            try:
+                import market_context as mc
+                rev = mc.detect_flow_reversal(code, lookback=7)
+                if rev.get("available"):
+                    flow_data = {
+                        "verdict": rev.get("verdict"),
+                        "daily": rev.get("daily", [])[:7],
+                        "signals": rev.get("signals", []),
+                    }
+            except Exception:
+                pass
+
             # DB 저장 (scheduled로 표시)
             saved = db.save_analysis(
                 code, name, tech_for_db, decision, targets, swings,
                 snapshot_type="scheduled",
+                cycles=cycles,
+                future_path=future_path,
+                flow=flow_data,
             )
             if saved:
                 results["success"].append({"code": code, "name": name, "id": saved.get("id")})

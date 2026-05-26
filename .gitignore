@@ -6,6 +6,9 @@ config/.env
 # Reports (generated)
 reports/
 
+# OpenDartReader auto-generated corp code cache (regenerated daily)
+docs_cache/
+
 # Python
 __pycache__/
 *.pyc

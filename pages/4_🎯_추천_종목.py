@@ -6,12 +6,13 @@ from zoneinfo import ZoneInfo
 
 import streamlit as st
 
-from common import init_page, get_db, nav_bar, sidebar_nav
+from common import init_page, get_db, nav_bar, sidebar_nav, render_macro_header
 from i18n import t
 
 st.set_page_config(page_title="추천 종목", page_icon="🎯", layout="wide")
 init_page("추천 종목")
 sidebar_nav()
+render_macro_header()
 nav_bar("recommend")
 
 st.title(t("recommend_title"))
@@ -47,9 +48,63 @@ saved_dates = db.list_recommendation_dates(limit=30)
 
 
 # ──────────────────────────────────────────
-# 상단 컨트롤
+# 오늘 세션별 진행 상황 (3개 자동 실행 시각)
 # ──────────────────────────────────────────
-cc1, cc2, cc3, cc4 = st.columns([2, 2, 2, 2])
+today_str = now.strftime("%Y-%m-%d")
+today_saved_sessions = set()
+try:
+    today_recs = db.list_recommendations(target_date=today_str)
+    today_saved_sessions = {r.get("session") for r in today_recs if r.get("session")}
+except Exception:
+    pass
+
+session_schedule = [
+    ("🌅", "morning", 8, 0, t("rec_session_morning_desc")),
+    ("☀️", "intraday", 14, 0, t("rec_session_intraday_desc")),
+    ("🌙", "evening", 21, 0, t("rec_session_evening_desc")),
+]
+
+st.markdown(f"##### {t('rec_session_progress')}")
+sess_cols = st.columns(3)
+for col, (emoji, sess_id, sh, sm, desc) in zip(sess_cols, session_schedule):
+    sess_time = now.replace(hour=sh, minute=sm, second=0, microsecond=0)
+
+    if sess_id in today_saved_sessions:
+        status = t("rec_session_done")
+        bg, border, fg = "#E8F8E8", "#27AE60", "#1E7E34"
+    elif now >= sess_time:
+        status = t("rec_session_pending")
+        bg, border, fg = "#FFF4E6", "#E67E22", "#A04A1F"
+    else:
+        delta = sess_time - now
+        hours = delta.seconds // 3600
+        minutes = (delta.seconds % 3600) // 60
+        if hours > 0:
+            status = f"⏳ {hours}시간 {minutes}분 후"
+        else:
+            status = f"⏳ {minutes}분 후"
+        bg, border, fg = "#F0F4FF", "#5DADE2", "#1B6FB0"
+
+    with col:
+        st.markdown(
+            f"<div style='background:{bg};padding:14px;border-radius:10px;"
+            f"border-left:4px solid {border};text-align:left;'>"
+            f"<div style='font-size:1.3rem;font-weight:bold;color:{fg};'>"
+            f"{emoji} {sess_id} <span style='font-size:0.85rem;color:#666;font-weight:normal;'>"
+            f"({sh:02d}:{sm:02d} KST · {desc})</span></div>"
+            f"<div style='font-size:0.95rem;color:{fg};font-weight:600;margin-top:6px;'>"
+            f"{status}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+st.write("")
+
+
+# ──────────────────────────────────────────
+# 상단 컨트롤 (자동 분석만 — 수동 실행 버튼 제거)
+# ──────────────────────────────────────────
+cc1, cc2, cc3 = st.columns([2, 2, 2])
 
 with cc1:
     if saved_dates:
@@ -73,35 +128,8 @@ with cc2:
 with cc3:
     st.write("")
     st.write("")
-    run_now = st.button(t("btn_run_now"), type="primary", use_container_width=True)
-
-with cc4:
-    st.write("")
-    st.write("")
     if st.button(t("btn_7d_trend"), use_container_width=True):
         st.session_state["show_trend"] = not st.session_state.get("show_trend", False)
-
-
-# ──────────────────────────────────────────
-# 실시간 실행 (옵션)
-# ──────────────────────────────────────────
-if run_now:
-    with st.spinner("🔍 추천 분석 중 (30초~6분)... 끝나면 DB에 저장됩니다."):
-        try:
-            import sys
-            from pathlib import Path
-            sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-            from scripts.daily_recommend import run_daily_recommend
-            result = run_daily_recommend(top_n=5, session=default_session)
-            if result.get("status") == "done":
-                st.success(f"✅ {result.get('saved')}건 저장 완료 — 페이지 새로고침")
-                st.rerun()
-            else:
-                st.warning(f"⚠️ {result}")
-        except Exception as e:
-            st.error(f"❌ 실행 실패: {e}")
-            with st.expander("🐛 상세"):
-                st.exception(e)
 
 
 # ──────────────────────────────────────────
@@ -109,8 +137,10 @@ if run_now:
 # ──────────────────────────────────────────
 if not target_date:
     st.info(
-        "💡 아직 저장된 추천이 없습니다. 위 **🚀 지금 분석 실행** 버튼을 누르거나, "
-        "매일 평일 16:30 KST 자동 실행을 기다리세요."
+        "💡 아직 저장된 추천이 없습니다. 매일 평일 다음 시각에 자동 분석됩니다:\n\n"
+        "- 🌅 **08:00 KST** — 장 시작 전 (morning)\n"
+        "- ☀️ **14:00 KST** — 장 중 (intraday)\n"
+        "- 🌙 **21:00 KST** — NXT 마감 후 (evening)"
     )
     st.stop()
 
@@ -132,8 +162,21 @@ sc1, sc2, sc3, sc4 = st.columns(4)
 sc1.metric("📅 추천 일자", target_date)
 sc2.metric("📊 총 추천", f"{total}건")
 sc3.metric("⏰ 세션", ", ".join(sessions_in_data) or "-")
-recommended_at = recs[0].get("recommended_at", "")[:19].replace("T", " ")
-sc4.metric("🕐 분석 시각", recommended_at)
+# UTC → KST 변환
+from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+_KST = _tz(_td(hours=9))
+def _to_kst(s: str) -> str:
+    if not s:
+        return "-"
+    try:
+        d = _dt.fromisoformat(s.replace("Z", "+00:00"))
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=_tz.utc)
+        return d.astimezone(_KST).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return s[:19].replace("T", " ")
+recommended_at = _to_kst(recs[0].get("recommended_at", ""))
+sc4.metric("🕐 분석 시각 (KST)", recommended_at)
 
 
 # ──────────────────────────────────────────
@@ -199,6 +242,19 @@ for r in recs:
         by_session[s][tier].append(r)
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def _peer_data(code: str, max_peers: int = 6) -> dict:
+    """동종업종 비교 데이터 (1시간 캐시)."""
+    try:
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "analyzer"))
+        import sector_compare as sc
+        return sc.compare_to_peers(code, max_peers=max_peers)
+    except Exception:
+        return {"sector_no": None, "sector_name": "", "peers": [], "self_in_peers": False}
+
+
 def _stock_card(stock: dict, mode: str = "view"):
     """추천 종목 카드."""
     code = stock.get("stock_code", "")
@@ -241,6 +297,50 @@ def _stock_card(stock: dict, mode: str = "view"):
                 for sig in signals[:5]:
                     st.markdown(f"- {sig}")
 
+        # ───── 섹터 + 관련주 비교 (지연 로딩 — expander 펼칠 때만 호출) ─────
+        with st.expander(t("rec_sector_compare"), expanded=False):
+            sec = _peer_data(code, max_peers=6)
+            peers = sec.get("peers") or []
+            sector_label = sec.get("sector_name") or "동종업종"
+            if not peers:
+                st.caption("ℹ️ 동종업종 데이터를 가져올 수 없습니다.")
+            else:
+                st.caption(f"📂 **{sector_label}** · 관련주 상위 {len(peers)}개")
+                import pandas as pd
+                rows = []
+                for p in peers:
+                    is_self = p["code"] == code
+                    rows.append({
+                        "비교": "👈 본인" if is_self else "",
+                        "종목": f"{p['name']} ({p['code']})",
+                        "현재가": f"{int(p['price']):,}" if p.get("price") else "-",
+                        "등락률": f"{p['change_pct']:+.2f}%",
+                    })
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+                # 섹터 평균 등락률
+                avg = sum(p["change_pct"] for p in peers) / len(peers)
+                self_chg = next(
+                    (p["change_pct"] for p in peers if p["code"] == code),
+                    None,
+                )
+                sec_color = "#E74C3C" if avg > 0 else ("#0064FF" if avg < 0 else "#7F8C8D")
+                if self_chg is not None:
+                    diff = self_chg - avg
+                    rel_msg = (
+                        f" · 본인 <strong>{self_chg:+.2f}%</strong> "
+                        f"(섹터 대비 <strong style='color:{sec_color};'>{diff:+.2f}%p</strong>)"
+                    )
+                else:
+                    rel_msg = ""
+                st.markdown(
+                    f"<div style='padding:6px 10px;border-radius:6px;background:{sec_color}10;"
+                    f"border-left:3px solid {sec_color};font-size:0.85rem;'>"
+                    f"📊 섹터 평균 등락률 <strong style='color:{sec_color};'>{avg:+.2f}%</strong>"
+                    f"{rel_msg}</div>",
+                    unsafe_allow_html=True,
+                )
+
 
 tier_meta = {
     "large": ("🏛 대형주", "시총 5조원 이상"),
@@ -277,7 +377,6 @@ for sess in sorted(by_session.keys()):
 # ──────────────────────────────────────────
 st.divider()
 st.caption(
-    f"⚡ DB 즉시 조회 모드 · "
-    f"매일 평일 16:30 KST 자동 분석 (GitHub Actions) · "
-    f"수동 실행은 우상단 '🚀 지금 분석 실행'"
+    "⚡ DB 즉시 조회 모드 · "
+    "매일 평일 자동 분석 (GitHub Actions): 🌅 08:00 / ☀️ 14:00 / 🌙 21:00 KST"
 )

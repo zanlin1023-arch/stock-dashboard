@@ -126,8 +126,17 @@ def save_analysis(
     targets: dict,
     swings: Optional[dict] = None,
     snapshot_type: str = "manual",  # 'manual' or 'scheduled'
+    cycles: Optional[list] = None,
+    future_path: Optional[list] = None,
+    flow: Optional[dict] = None,
 ) -> dict:
-    """분석 결과를 히스토리에 저장 (같은 날 같은 종목+타입은 덮어쓰기)."""
+    """분석 결과를 히스토리에 저장 (같은 날 같은 종목+타입은 덮어쓰기).
+
+    추가 인자 (raw_data JSONB에만 저장 — 스키마 변경 불필요):
+      - cycles: 시간 변곡 마커 리스트 (과거+미래)
+      - future_path: 미래 추세 예상 경로 (N파동 시나리오)
+      - flow: {"verdict": str, "daily": list[dict]} 외국인/기관 수급
+    """
     from datetime import date as _date
     client = get_client()
     if not client:
@@ -157,6 +166,9 @@ def save_analysis(
             "decision": _json_safe(decision),
             "targets": _json_safe(targets),
             "swings": _json_safe(swings) if swings else None,
+            "cycles": _json_safe(cycles) if cycles else None,
+            "future_path": _json_safe(future_path) if future_path else None,
+            "flow": _json_safe(flow) if flow else None,
         },
     }
     # 같은 날짜+종목+타입 중복 시 UPDATE (UNIQUE 제약 활용)
@@ -211,7 +223,7 @@ def save_recommendations(results: dict, session: str = "evening") -> int:
                 "stock_code": stock.get("code"),
                 "stock_name": stock.get("name"),
                 "score": _safe_num(stock.get("score")),
-                "price": _safe_num(stock.get("price")),
+                "price": int(float(stock.get("price") or 0)) or None,
                 "change_pct": _safe_num(stock.get("change_pct")),
                 "market_cap_eok": int(stock.get("market_cap_eok") or 0) or None,
                 "foreign_5d": int(stock.get("foreign_5d") or 0) or None,

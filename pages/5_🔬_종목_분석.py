@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from common import init_page, get_db, sidebar_nav, nav_bar
+from common import init_page, get_db, sidebar_nav, nav_bar, render_macro_header
 from i18n import t
 
 st.set_page_config(
@@ -15,6 +15,7 @@ st.set_page_config(
 
 init_page("종목 분석")
 sidebar_nav()
+render_macro_header()
 nav_bar("analyze")
 
 
@@ -28,24 +29,43 @@ st.markdown(t("home_subtitle"))
 db = get_db()
 _db_available = db is not None
 
-# 사이드바: 종목 입력
+# 사이드바엔 DB 상태/버전만 표시 (입력 위젯은 메인 본문으로 이동)
 with st.sidebar:
-    st.header(t("search_header"))
-    query = st.text_input(
-        t("search_input"),
-        value=st.session_state.get("last_query", ""),
-        placeholder=t("search_placeholder"),
-    )
-    days = st.slider(t("analyze_period"), 90, 365, 180, step=30)
-    save_to_db = st.checkbox(t("save_to_db"), value=_db_available, disabled=not _db_available)
-    analyze_btn = st.button(t("btn_analyze"), type="primary", use_container_width=True)
-
     st.divider()
     if _db_available:
         st.success(t("db_connected"))
     else:
         st.warning(t("db_disconnected"))
     st.caption(f"{t('version')}: 0.3.0")
+
+# ───────────────────────────────────────────────────────
+# 본문 상단 — 종목 입력 (사이드바에서 이동)
+# ───────────────────────────────────────────────────────
+with st.container(border=True):
+    st.markdown(f"#### 🔎 {t('search_header')}")
+    qc1, qc2, qc3, qc4 = st.columns([4, 2, 2, 2])
+    with qc1:
+        query = st.text_input(
+            t("search_input"),
+            value=st.session_state.get("last_query", ""),
+            placeholder=t("search_placeholder"),
+            label_visibility="collapsed",
+        )
+    with qc2:
+        days = st.slider(t("analyze_period"), 90, 365, 180, step=30)
+    with qc3:
+        save_to_db = st.checkbox(
+            t("save_to_db"),
+            value=_db_available,
+            disabled=not _db_available,
+        )
+    with qc4:
+        st.write("")
+        analyze_btn = st.button(
+            t("btn_analyze"),
+            type="primary",
+            use_container_width=True,
+        )
 
 # ───────────────────────────────────────────────────────
 # 분석 실행
@@ -186,6 +206,51 @@ if analyze_btn and query:
     else:
         st.warning(t("chart_failed"))
 
+    # ───── 동종업종 비교 위젯 ─────
+    st.divider()
+    st.subheader("🏢 동종업종 비교")
+
+    @st.cache_data(ttl=600, show_spinner=False)
+    def _sector_data(stock_code: str) -> dict:
+        try:
+            import sector_compare as sc
+            return sc.compare_to_peers(stock_code, max_peers=10)
+        except Exception:
+            return {"sector_no": None, "sector_name": "", "peers": [], "self_in_peers": False}
+
+    with st.spinner("동종업종 종목 조회 중..."):
+        sec = _sector_data(code)
+
+    if sec.get("peers"):
+        sector_label = sec.get("sector_name") or "동종업종"
+        st.caption(f"📂 **{sector_label}** · 상위 {len(sec['peers'])}개 종목")
+
+        import pandas as pd
+        rows = []
+        for p in sec["peers"]:
+            is_self = p["code"] == code
+            rows.append({
+                "비교": "👈 본인" if is_self else "",
+                "종목": f"{p['name']} ({p['code']})",
+                "현재가": f"{int(p['price']):,}" if p['price'] else "-",
+                "등락률": f"{p['change_pct']:+.2f}%",
+            })
+        df_sec = pd.DataFrame(rows)
+        st.dataframe(df_sec, use_container_width=True, hide_index=True)
+
+        avg_chg = sum(p["change_pct"] for p in sec["peers"]) / len(sec["peers"])
+        sec_color = "#E74C3C" if avg_chg > 0 else ("#0064FF" if avg_chg < 0 else "#7F8C8D")
+        st.markdown(
+            f"<div style='padding:8px 12px;border-radius:6px;background:{sec_color}10;"
+            f"border-left:3px solid {sec_color};font-size:0.9rem;'>"
+            f"📊 섹터 평균 등락률: <strong style='color:{sec_color};'>{avg_chg:+.2f}%</strong> · "
+            f"본인 등락률: <strong>{(result.get('daily_return') or 0):+.2f}%</strong>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.caption("ℹ️ 동종업종 데이터를 가져올 수 없습니다.")
+
     # DB 저장
     if save_to_db and _db_available and db is not None:
         try:
@@ -196,7 +261,29 @@ if analyze_btn and query:
                 "senkou_a": float(df["senkou_a"].iloc[-1]) if df["senkou_a"].notna().any() else None,
                 "senkou_b": float(df["senkou_b"].iloc[-1]) if df["senkou_b"].notna().any() else None,
             })
-            saved = db.save_analysis(code, name, tech_for_db, decision, targets, swings)
+            # 시간 사이클 + 미래 추세 + 수급 (DB 누적 분석용)
+            from chart_ichimoku import compute_time_cycles, project_future_path
+            cycles = compute_time_cycles(swings["C"]["idx"], len(df))
+            future_path = project_future_path(
+                decision["price"], cycles, targets, decision.get("stop"),
+            )
+            flow_data = None
+            try:
+                import market_context as mc
+                rev = mc.detect_flow_reversal(code, lookback=7)
+                if rev.get("available"):
+                    flow_data = {
+                        "verdict": rev.get("verdict"),
+                        "daily": rev.get("daily", [])[:7],
+                        "signals": rev.get("signals", []),
+                    }
+            except Exception:
+                pass
+
+            saved = db.save_analysis(
+                code, name, tech_for_db, decision, targets, swings,
+                cycles=cycles, future_path=future_path, flow=flow_data,
+            )
             if saved:
                 st.success(f"{t('db_save_done')} (id: {saved.get('id')})")
         except Exception as e:

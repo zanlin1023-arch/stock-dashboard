@@ -210,19 +210,37 @@ def make_decision(df: pd.DataFrame, swings: dict, targets: dict) -> dict:
     if len(df) > 26:
         chikou_ok = price > float(df["close"].iloc[-27])
 
-    # 시그널 판단
+    rsi = None
+    if "rsi_14" in df.columns and pd.notna(last.get("rsi_14")):
+        rsi = float(last["rsi_14"])
+
+    # 시그널 판단 (일목 3조건 + RSI 가드)
     if cloud_pos == "above" and tk_bull and chikou_ok:
-        stance = "STRONG_BUY"
-        action = "🔥 강력 매수 (삼역호전)"
-        action_color = "#27AE60"
+        if rsi is not None and rsi >= 75:
+            stance = "BUY"
+            action = "⚠️ 과매수 진입 신중 (삼역호전 but RSI≥75)"
+            action_color = "#F39C12"
+        elif rsi is not None and rsi >= 70:
+            stance = "BUY"
+            action = "✅ 매수 우호 (삼역호전 — RSI 70+ 분할 진입)"
+            action_color = "#2ECC71"
+        else:
+            stance = "STRONG_BUY"
+            action = "🔥 강력 매수 (삼역호전)"
+            action_color = "#27AE60"
     elif cloud_pos == "below" and not tk_bull and chikou_ok is False:
         stance = "STRONG_SELL"
         action = "🚨 강력 매도 (삼역역전)"
         action_color = "#E74C3C"
     elif cloud_pos == "above" and tk_bull:
-        stance = "BUY"
-        action = "✅ 매수 우호 (구름 위 + TK 골든)"
-        action_color = "#2ECC71"
+        if rsi is not None and rsi >= 70:
+            stance = "NEUTRAL"
+            action = "➖ 관망 (구름 위지만 과매수)"
+            action_color = "#7F8C8D"
+        else:
+            stance = "BUY"
+            action = "✅ 매수 우호 (구름 위 + TK 골든)"
+            action_color = "#2ECC71"
     elif cloud_pos == "below" and not tk_bull:
         stance = "SELL"
         action = "⚠️ 매도 우호 (구름 아래 + TK 데드)"
@@ -253,14 +271,100 @@ def make_decision(df: pd.DataFrame, swings: dict, targets: dict) -> dict:
         "cloud_pos": cloud_pos,
         "tk_bull": tk_bull,
         "chikou_ok": chikou_ok,
+        "rsi": rsi,
         "upside_targets": upside_targets,
         "stop": stop,
     }
 
 
 # ───────────────────────────────────────────────────────
+# 4-b. 미래 추세 시나리오 (시간론 변곡점 × 파동론 N파동 × 가격론 N/V/E)
+# ───────────────────────────────────────────────────────
+def project_future_path(
+    current_price: float,
+    cycles: list[dict],
+    targets: dict,
+    stop: Optional[tuple] = None,
+) -> list[dict]:
+    """미래 변곡점에서의 예상 가격 경로 (N파동 = 상승-조정-상승 모델).
+
+    일목 3원리 결합:
+      1. 시간론: 미래 변곡점 (cycles 중 is_future=True)
+      2. 파동론: N파동 = 첫 변곡=피크, 두번째=조정 골, 세번째=재상승
+      3. 가격론: 피크=V/N 목표, 조정=피크-현재가의 38.2% 되돌림, 재상승=다음 목표
+
+    Returns: [{"target_idx": 절대 idx, "cycle": int, "price": float, "label": str, "is_peak": bool}]
+    """
+    future_cycles = sorted(
+        [c for c in cycles if c.get("is_future")],
+        key=lambda c: c["target_idx"],
+    )[:3]
+    if not future_cycles or not targets:
+        return []
+
+    upside = sorted(
+        [(k, targets[k]) for k in ("V", "N", "E") if targets.get(k, 0) > current_price],
+        key=lambda x: x[1],
+    )
+    if not upside:
+        return []
+
+    first_label, first_target = upside[0]
+    pullback_to = current_price + (first_target - current_price) * 0.382
+    if stop:
+        pullback_to = max(pullback_to, stop[1] * 1.02)
+
+    if len(upside) >= 2:
+        third_label, third_target = upside[1]
+    else:
+        third_label, third_target = first_label, first_target
+
+    sequence = [
+        (first_target, f"{first_label} 도달", True),
+        (pullback_to, "V파동 조정", False),
+        (third_target, f"{third_label} 도전", True),
+    ]
+
+    path = []
+    for cyc, (pr, lbl, is_peak) in zip(future_cycles, sequence):
+        path.append({
+            "target_idx": cyc["target_idx"],
+            "cycle": cyc["cycle"],
+            "price": float(pr),
+            "label": lbl,
+            "is_peak": is_peak,
+        })
+    return path
+
+
+# ───────────────────────────────────────────────────────
 # 5. 차트 렌더링
 # ───────────────────────────────────────────────────────
+def _fetch_flow_for_chart(code: str, lookback: int = 30) -> tuple[list[dict], str | None, str | None]:
+    """차트용 수급 데이터 + 종합 verdict + 세부 라벨 (실패 시 빈값).
+
+    Returns: (daily, verdict, detail)
+      - daily: 일별 수급 (외인/기관 매매 주식수 + 종가)
+      - verdict: 종합 한 줄 (예: "🟡 외인/기관 분리 (혼조)")
+      - detail: 세부 라벨 (예: "외인 -8,765주 ↘ · 기관 +5,432주 ↗")
+    """
+    try:
+        import market_context as mc
+        daily = mc.get_daily_flow(code, days=lookback)
+        reversal = mc.detect_flow_reversal(code, lookback=7)
+        if not reversal.get("available"):
+            return (daily or []), None, None
+        verdict = reversal.get("verdict")
+        rf = int(reversal.get("recent_foreign_net") or 0)
+        ri = int(reversal.get("recent_inst_net") or 0)
+        f_arrow = "↗" if rf > 0 else ("↘" if rf < 0 else "→")
+        i_arrow = "↗" if ri > 0 else ("↘" if ri < 0 else "→")
+        detail = f"외인 {rf:+,}주 {f_arrow} · 기관 {ri:+,}주 {i_arrow}"
+        return (daily or []), verdict, detail
+    except Exception:
+        return ([], None, None)
+
+
 def render_ichimoku_chart(
     code: str,
     name: str,
@@ -340,21 +444,60 @@ def render_ichimoku_chart(
     if extended["chikou"].notna().any():
         apds.append(mpf.make_addplot(extended["chikou"], color="#27AE60", width=1.0))
 
+    # 외국인/기관 수급 (하단 패널) — 일목 모델과 독립된 보조 신호
+    flow_daily, flow_verdict, flow_detail = _fetch_flow_for_chart(code, lookback=min(60, len(plot_df)))
+    foreign_arr = np.full(len(extended), np.nan)
+    inst_arr = np.full(len(extended), np.nan)
+    has_flow_panel = False
+    if flow_daily:
+        date_to_flow = {}
+        for r in flow_daily:
+            try:
+                d = datetime.strptime(r["date"], "%Y.%m.%d").date()
+                date_to_flow[d] = (
+                    float(r.get("foreign_net", 0) or 0),
+                    float(r.get("inst_net", 0) or 0),
+                )
+            except Exception:
+                continue
+        for i, idx in enumerate(extended.index):
+            try:
+                k = idx.date()
+                if k in date_to_flow:
+                    foreign_arr[i], inst_arr[i] = date_to_flow[k]
+            except Exception:
+                continue
+        if not np.isnan(foreign_arr).all() or not np.isnan(inst_arr).all():
+            has_flow_panel = True
+            apds.append(mpf.make_addplot(
+                foreign_arr, panel=1, type="bar", color="#3498DB",
+                width=0.7, ylabel="외국인(주)", alpha=0.75,
+            ))
+            apds.append(mpf.make_addplot(
+                inst_arr, panel=1, type="bar", color="#E67E22",
+                width=0.7, secondary_y=True, alpha=0.55,
+            ))
+
     # 캔들은 실데이터 구간만, 미래는 NaN
     candle_df = extended.copy()
-    # OHLC 컬럼 미래 NaN 유지 → 캔들 안 그려짐
-    fig, axes = mpf.plot(
-        candle_df,
+    plot_kwargs = dict(
         type="candle",
         addplot=apds,
-        volume=False,  # 분리해서 직접 그림
+        volume=False,
         style=style,
-        figsize=(16, 9),
+        figsize=(16, 10 if has_flow_panel else 9),
         returnfig=True,
         tight_layout=True,
         warn_too_much_data=10000,
     )
+    if has_flow_panel:
+        plot_kwargs["panel_ratios"] = (6, 1.4)
+    fig, axes = mpf.plot(candle_df, **plot_kwargs)
     ax_main = axes[0]
+    # 수급 패널: 0 기준선 추가 (매수/매도 구분)
+    if has_flow_panel and len(axes) >= 3:
+        for ax in axes[2:]:
+            ax.axhline(0, color="#888", linewidth=0.6, linestyle="-", alpha=0.6)
 
     # ───── y축 범위를 합리적으로 (가까운 목표까지만, 너무 먼 건 차트 밖 화살표) ─────
     y_min_data = float(np.nanmin([plot_df["low"].min(), extended["senkou_b"].min()]))
@@ -563,6 +706,49 @@ def render_ichimoku_chart(
             arrowprops=dict(arrowstyle="->", color="#555", lw=0.8),
         )
 
+    # ───── 미래 추세 시나리오 (N파동: 상승-조정-재상승) ─────
+    future_path = project_future_path(
+        current_price=current_price,
+        cycles=cycles,
+        targets=targets,
+        stop=decision.get("stop"),
+    )
+    # 차트 좌표로 변환 + 범위 필터
+    chart_path = []
+    for p in future_path:
+        rel_idx = p["target_idx"] - plot_base_idx
+        if 0 <= rel_idx < n_total:
+            chart_path.append({**p, "rel_idx": rel_idx})
+    if chart_path:
+        xs = [today_x] + [p["rel_idx"] for p in chart_path]
+        ys = [current_price] + [p["price"] for p in chart_path]
+        ax_main.plot(
+            xs, ys,
+            linestyle=":", linewidth=1.8, color="#2C3E50",
+            marker="o", markersize=6,
+            markerfacecolor="#2C3E50", markeredgecolor="white",
+            markeredgewidth=1.2,
+            zorder=6,
+            label="예상 경로",
+        )
+        for p in chart_path:
+            try:
+                date_str = extended.index[p["rel_idx"]].strftime("%m/%d")
+            except Exception:
+                date_str = f"+{p['cycle']}봉"
+            pct = (p["price"] / current_price - 1) * 100
+            color = "#C0392B" if p["is_peak"] else "#2980B9"
+            va = "bottom" if p["is_peak"] else "top"
+            offset_y = (0.03 if p["is_peak"] else -0.03) * y_range
+            ax_main.text(
+                p["rel_idx"], p["price"] + offset_y,
+                f"{date_str}\n{p['price']:,.0f} ({pct:+.1f}%)\n{p['label']}",
+                fontsize=8, ha="center", va=va,
+                color=color, fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.25", facecolor="white",
+                          edgecolor=color, alpha=0.92, linestyle="--"),
+            )
+
     # ───── 의사결정 박스 (좌측 상단) ─────
     info_lines = [
         f"📌 {decision['action']}",
@@ -596,6 +782,13 @@ def render_ichimoku_chart(
         info_lines.append("")
         stop_name, stop_val = decision["stop"]
         info_lines.append(f"🛡 손절: {stop_name} {stop_val:,.0f} ({(stop_val/current_price-1)*100:+.1f}%)")
+
+    # 수급 보조 신호 (일목 모델과 독립) — verdict + 세부 라벨 (A옵션)
+    if flow_verdict:
+        info_lines.append("")
+        info_lines.append(f"💹 수급 (7일): {flow_verdict}")
+        if flow_detail:
+            info_lines.append(f"   {flow_detail}")
 
     # 매매 가이드 (가까운 목표부터 순서대로 분할 익절)
     if decision["upside_targets"]:
@@ -631,17 +824,18 @@ def render_ichimoku_chart(
                  edgecolor="#CCCCCC", alpha=0.9),
     )
 
-    # 타이틀
+    # 타이틀 (제목 + 부제를 figure-level로 합쳐 axes title과 겹치지 않게)
     today_str = datetime.now().strftime("%Y-%m-%d")
     fig.suptitle(
         f"{name} ({code}) — 일목균형표 종합 분석   {today_str}",
-        fontsize=14, fontweight="bold", y=0.998,
+        fontsize=14, fontweight="bold", y=1.015,
     )
-    # 부제: 카피
-    ax_main.set_title(
-        "Calculate the Future, Don't Guess It — 가격(N/E/V) × 시간(9/17/26봉)",
-        fontsize=9, color="#888", loc="center", pad=4,
+    fig.text(
+        0.5, 0.975,
+        "Calculate the Future, Don't Guess It — 가격(N/E/V) × 시간(9/17/26봉) × 파동(N파동 시나리오)",
+        fontsize=9, color="#888", ha="center", va="top",
     )
+    ax_main.set_title("")  # axes title 제거 (suptitle과 겹침 방지)
 
     # 저장
     if out_path is None:

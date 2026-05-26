@@ -6,12 +6,13 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
-from common import init_page, get_db, nav_bar, sidebar_nav
+from common import init_page, get_db, nav_bar, sidebar_nav, render_macro_header
 from i18n import t
 
 st.set_page_config(page_title="보유 종목", page_icon="💼", layout="wide")
 init_page("보유 종목")
 sidebar_nav()
+render_macro_header()
 nav_bar("holdings")
 
 st.title(t("holdings_title"))
@@ -96,6 +97,7 @@ with st.expander(t("holdings_add"), expanded=False):
                             from chart_ichimoku import (
                                 compute_ichimoku, detect_swing_points,
                                 compute_price_targets, make_decision,
+                                compute_time_cycles, project_future_path,
                             )
                             df_ana = technical.fetch_ohlcv(code, days=180)
                             df_ana = technical.add_indicators(df_ana)
@@ -111,9 +113,30 @@ with st.expander(t("holdings_add"), expanded=False):
                                 if col in df_ana.columns and df_ana[col].notna().any():
                                     tech_for_db[col] = float(df_ana[col].iloc[-1])
 
+                            # 시간 사이클 + 미래 추세 경로 + 수급 — DB 누적 분석용
+                            cycles = compute_time_cycles(swings["C"]["idx"], len(df_ana))
+                            future_path = project_future_path(
+                                decision["price"], cycles, targets, decision.get("stop"),
+                            )
+                            flow_data = None
+                            try:
+                                import market_context as mc
+                                rev = mc.detect_flow_reversal(code, lookback=7)
+                                if rev.get("available"):
+                                    flow_data = {
+                                        "verdict": rev.get("verdict"),
+                                        "daily": rev.get("daily", [])[:7],
+                                        "signals": rev.get("signals", []),
+                                    }
+                            except Exception:
+                                pass
+
                             saved = db.save_analysis(
                                 code, name, tech_for_db, decision, targets, swings,
                                 snapshot_type="manual",
+                                cycles=cycles,
+                                future_path=future_path,
+                                flow=flow_data,
                             )
                             if saved:
                                 st.success(f"📥 분석 히스토리 저장 완료 — {decision.get('action', '')}")
@@ -149,11 +172,29 @@ def _fetch_current_price(code: str) -> float | None:
         return None
 
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def _fetch_meta(code: str, name: str) -> dict:
+    """업종/테마 (24h 캐시)."""
+    try:
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "analyzer"))
+        import enrich
+        m = enrich._enrich_via_naver(code, name)
+        return {
+            "sector": (m.get("sector") or "").strip(),
+            "themes": m.get("themes") or [],
+        }
+    except Exception:
+        return {"sector": "", "themes": []}
+
+
 rows = []
 total_buy = 0.0
 total_eval = 0.0
 for h in holdings:
     cur = _fetch_current_price(h["stock_code"])
+    meta = _fetch_meta(h["stock_code"], h["stock_name"])
     avg = float(h["avg_price"])
     qty = int(h["quantity"])
     buy_amount = avg * qty
@@ -162,9 +203,12 @@ for h in holdings:
     pnl_pct = (pnl / buy_amount * 100) if buy_amount else 0.0
     total_buy += buy_amount
     total_eval += eval_amount
+    themes_str = " · ".join(meta["themes"][:3])
     rows.append({
         "id": h["id"],
         "종목": f"{h['stock_name']} ({h['stock_code']})",
+        "섹터": meta["sector"] or "-",
+        "테마": themes_str or "-",
         "평단가": f"{avg:,.0f}",
         "현재가": f"{cur:,.0f}" if cur else "-",
         "수량": qty,

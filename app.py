@@ -6,7 +6,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from common import init_page, get_db, sidebar_nav
+from common import init_page, get_db, sidebar_nav, render_macro_header
 from i18n import t
 
 st.set_page_config(
@@ -18,6 +18,9 @@ st.set_page_config(
 
 init_page("대시보드")
 sidebar_nav()
+
+# 거시경제 헤더 (모든 페이지 공통)
+render_macro_header()
 
 
 # ───────────────────────────────────────────────────────
@@ -50,9 +53,124 @@ if not holdings:
 sys.path.insert(0, str(Path(__file__).resolve().parent / "analyzer"))
 
 
+# ───────────────────────────────────────────────────────
+# 보유자 관점 액션 판단 (신규 진입 판단과 분리)
+#   - 입력: 손익률 + RSI + 일목 위치/TK + 종합 stance
+#   - 출력: "들고 갈지 / 익절할지 / 추가매수할지 / 손절할지"
+# ───────────────────────────────────────────────────────
+def decide_holding_action(
+    pnl_pct: float | None,
+    rsi: float | None,
+    cloud_pos: str | None,
+    tk_bull: bool | None,
+    stance: str | None,
+    flow_verdict: str | None = None,
+) -> tuple[str, str]:
+    """보유자 액션 라벨과 색상 hex 반환.
+
+    flow_verdict: market_context.detect_flow_reversal()의 verdict 문자열
+      - "🟢 외인+기관 동반 매수" / "✅ 외국인 매수 전환"  → 강세 수급
+      - "🔴 외인+기관 동반 매도" / "⚠️ 외국인 매도 전환" → 약세 수급
+      - "🟡 외인/기관 분리 (혼조)"                          → 중립
+    """
+    p = pnl_pct if pnl_pct is not None else 0.0
+    r = rsi if rsi is not None else 50.0
+    bullish = stance in ("STRONG_BUY", "BUY")
+    bearish = stance in ("STRONG_SELL", "SELL")
+    weak_trend = cloud_pos == "below" or tk_bull is False
+
+    # ── 1) 일목+RSI 기반 기본 액션 ──
+    if p <= -10 and weak_trend:
+        base = ("🔴 손절 검토 (손실 확대 + 추세 약화)", "#E74C3C")
+    elif p >= 50 and (r >= 75 or cloud_pos == "below"):
+        base = ("💰 전량 익절 검토 (큰 수익 + 추세 둔화)", "#C0392B")
+    elif p >= 20 and r >= 70:
+        base = ("🎯 분할 익절 (50% 정리, 나머지 추세 추종)", "#E67E22")
+    elif p >= 5 and stance == "STRONG_BUY" and r < 65:
+        base = ("➕ 추가 매수 고려 (추세 강세 지속)", "#27AE60")
+    elif p <= -5 and cloud_pos == "above" and r < 40:
+        base = ("🤔 분할 추가매수 신중 (과매도 반등 노림)", "#3498DB")
+    elif p >= 0 and bullish and r < 70:
+        base = ("🟢 홀딩 (추세 유효)", "#2ECC71")
+    elif p < 0 and bullish:
+        base = ("⏸️ 홀딩 (추세 회복 대기)", "#5DADE2")
+    elif bearish and p > 0:
+        base = ("⚠️ 일부 정리 검토 (추세 약화)", "#F39C12")
+    else:
+        base = ("➖ 관망 (방향성 불명확)", "#7F8C8D")
+
+    # ── 2) 수급 보조 신호 (일목 액션은 유지, 라벨에 마크만 추가) ──
+    if not flow_verdict:
+        return base
+
+    label, color = base
+    fv = flow_verdict
+    bull_flow = ("동반 매수" in fv) or ("매수 전환" in fv)
+    bear_flow = ("동반 매도" in fv) or ("매도 전환" in fv)
+
+    if bull_flow and (bearish or weak_trend):
+        # 일목은 약세인데 수급은 강세 → 추세 반전 가능 (보유자는 손절 보류)
+        label = label + "  ·  🔵 수급 반전 신호"
+    elif bear_flow and bullish:
+        # 일목 강세인데 수급은 이탈 → 익절 우호
+        label = label + "  ·  ⚠️ 수급 이탈 주의"
+    elif bull_flow and bullish:
+        label = label + "  ·  ✅ 수급 동행"
+    elif bear_flow and bearish:
+        label = label + "  ·  ❌ 수급 약세"
+    # 혼조는 표기 생략 (노이즈)
+
+    return (label, color)
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def _fetch_flow_summary(code: str) -> dict | None:
+    """외국인/기관 수급 종합 + 세부 (30분 캐시).
+
+    Returns:
+        {
+            "verdict": "🟡 외인/기관 분리 (혼조)",       # 종합
+            "detail": "외인 -8,765주 ↘ · 기관 +5,432주 ↗",  # A옵션 세부 라벨
+        }
+    """
+    try:
+        import market_context as mc
+        flow = mc.detect_flow_reversal(code, lookback=7)
+        if not flow.get("available"):
+            return None
+        rf = int(flow.get("recent_foreign_net") or 0)
+        ri = int(flow.get("recent_inst_net") or 0)
+        f_arrow = "↗" if rf > 0 else ("↘" if rf < 0 else "→")
+        i_arrow = "↗" if ri > 0 else ("↘" if ri < 0 else "→")
+        detail = f"외인 {rf:+,}주 {f_arrow} · 기관 {ri:+,}주 {i_arrow}"
+        return {"verdict": flow.get("verdict"), "detail": detail}
+    except Exception:
+        return None
+
+
+# 하위 호환 alias (혹시 다른 호출처가 있으면 verdict 문자열만 반환)
+def _fetch_flow_verdict(code: str) -> str | None:
+    s = _fetch_flow_summary(code)
+    return s.get("verdict") if s else None
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def _fetch_stock_meta(code: str, name: str) -> dict:
+    """업종/테마 정보 (24시간 캐시)."""
+    try:
+        import enrich
+        meta = enrich._enrich_via_naver(code, name)
+        return {
+            "sector": meta.get("sector", "") or "",
+            "themes": meta.get("themes", []) or [],
+        }
+    except Exception:
+        return {"sector": "", "themes": []}
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def _analyze_one(code: str, name: str) -> dict:
-    """단일 종목 빠른 분석 — 현재가/RSI/일목 위치/의사결정."""
+    """단일 종목 빠른 분석 — 현재가/RSI/일목 위치/의사결정/수급/섹터."""
     import technical
     from chart_ichimoku import (
         compute_ichimoku,
@@ -79,6 +197,12 @@ def _analyze_one(code: str, name: str) -> dict:
         targets = compute_price_targets(A, B, C)
         decision = make_decision(df, swings, targets)
 
+        # 수급 (캐시) + 섹터/테마 (캐시)
+        flow_summary = _fetch_flow_summary(code) or {}
+        flow_verdict = flow_summary.get("verdict")
+        flow_detail = flow_summary.get("detail")
+        meta = _fetch_stock_meta(code, name)
+
         return {
             "code": code,
             "name": name,
@@ -91,6 +215,10 @@ def _analyze_one(code: str, name: str) -> dict:
             "target_n": targets.get("N"),
             "stop": decision.get("stop"),
             "tk_bull": decision.get("tk_bull"),
+            "flow_verdict": flow_verdict,
+            "flow_detail": flow_detail,
+            "sector": meta.get("sector"),
+            "themes": meta.get("themes", []),
             "ok": True,
         }
     except Exception as e:
@@ -160,6 +288,10 @@ for a in analyses:
         "tk_bull": a.get("tk_bull"),
         "price": a.get("price"),
         "avg_price": avg,
+        "flow_verdict": a.get("flow_verdict"),
+        "flow_detail": a.get("flow_detail"),
+        "sector": a.get("sector"),
+        "themes": a.get("themes", []),
     })
 
 sorted_pnl = sorted(per_stock, key=lambda x: -x["pnl_pct"])
@@ -295,6 +427,29 @@ for i in range(0, len(per_stock), 3):
         with cols[j]:
             with st.container(border=True):
                 st.markdown(f"**{s['name']}**  `{s['code']}`")
+
+                # 섹터 + 테마 태그
+                sector = s.get("sector")
+                themes = s.get("themes") or []
+                if sector or themes:
+                    chips = []
+                    if sector:
+                        chips.append(
+                            f"<span style='background:#EAF4FB;color:#1B6FB0;"
+                            f"padding:2px 8px;border-radius:10px;font-size:0.72rem;"
+                            f"font-weight:600;margin-right:4px;'>🏢 {sector}</span>"
+                        )
+                    for th in themes[:3]:
+                        chips.append(
+                            f"<span style='background:#FFF4E6;color:#B5651D;"
+                            f"padding:2px 8px;border-radius:10px;font-size:0.72rem;"
+                            f"margin-right:4px;'>#{th}</span>"
+                        )
+                    st.markdown(
+                        f"<div style='margin:2px 0 8px 0;line-height:1.8;'>{''.join(chips)}</div>",
+                        unsafe_allow_html=True,
+                    )
+
                 if s.get("price"):
                     pnl_color = "🟢" if s["pnl_pct"] >= 0 else "🔴"
                     st.metric(
@@ -306,8 +461,35 @@ for i in range(0, len(per_stock), 3):
                 rsi_txt = f"RSI {s['rsi']:.0f}" if s.get("rsi") else ""
                 tk_txt = "TK✅" if s.get("tk_bull") else "TK⚠️"
                 st.caption(f"{cloud_emoji} {rsi_txt} · {tk_txt}")
+
+                # 수급 시그널 (외국인/기관) — verdict + 세부 (A옵션)
+                if s.get("flow_verdict"):
+                    st.caption(f"💹 수급: {s['flow_verdict']}")
+                    if s.get("flow_detail"):
+                        st.markdown(
+                            f"<div style='font-size:0.78rem;color:#666;margin-left:18px;"
+                            f"margin-top:-6px;margin-bottom:4px;'>{s['flow_detail']}</div>",
+                            unsafe_allow_html=True,
+                        )
+
+                # 보유자 액션 (들고 갈지/익절/추가매수/손절) — 일목+RSI+수급 결합
+                holder_action, holder_color = decide_holding_action(
+                    pnl_pct=s.get("pnl_pct"),
+                    rsi=s.get("rsi"),
+                    cloud_pos=s.get("cloud_pos"),
+                    tk_bull=s.get("tk_bull"),
+                    stance=s.get("stance"),
+                    flow_verdict=s.get("flow_verdict"),
+                )
+                st.markdown(
+                    f"<div style='padding:6px 10px;border-radius:6px;"
+                    f"background:{holder_color}15;border-left:3px solid {holder_color};"
+                    f"font-size:0.85rem;color:{holder_color};font-weight:600;'>"
+                    f"{holder_action}</div>",
+                    unsafe_allow_html=True,
+                )
                 if s.get("action"):
-                    st.caption(f"💡 {s['action']}")
+                    st.caption(f"📊 신호: {s['action']}")
                 if st.button(f"🔬 " + t("detail_analysis"), key=f"dash_anly_{s['code']}", use_container_width=True):
                     st.session_state["last_query"] = s["name"]
                     st.switch_page("pages/5_🔬_종목_분석.py")
