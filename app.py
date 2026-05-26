@@ -1,4 +1,4 @@
-"""주식 분석 대시보드 - 한국 주식(KOSPI/KOSDAQ) 일목균형표 + 종합 분석."""
+"""분석 대시보드 - KOSPI/KOSDAQ 일목균형표 + 종합 분석."""
 from __future__ import annotations
 
 import os
@@ -28,7 +28,7 @@ sys.path.insert(0, str(ROOT / "analyzer"))
 # 페이지 설정
 # ───────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="주식 분석 대시보드",
+    page_title="분석 대시보드",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -43,7 +43,7 @@ def check_password() -> bool:
     if st.session_state.get("authenticated"):
         return True
 
-    st.title("🔒 주식 분석 대시보드")
+    st.title("🔒 분석 대시보드")
     st.markdown("비밀번호를 입력하세요.")
 
     with st.form("login_form"):
@@ -70,8 +70,8 @@ check_password()
 # ───────────────────────────────────────────────────────
 # 메인 페이지
 # ───────────────────────────────────────────────────────
-st.title("📊 주식 분석 대시보드")
-st.markdown("한국 주식(KOSPI/KOSDAQ) — 일목균형표 + 백테스팅 + 펀더멘털 종합 분석")
+st.title("📊 분석 대시보드")
+st.markdown("KOSPI/KOSDAQ — 일목균형표 + 백테스팅 + 펀더멘털 종합 분석")
 
 # 사이드바: 종목 입력
 with st.sidebar:
