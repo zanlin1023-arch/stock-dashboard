@@ -5,13 +5,14 @@ import pandas as pd
 import streamlit as st
 
 from common import init_page, get_db, nav_bar, sidebar_nav
+from i18n import t
 
 st.set_page_config(page_title="분석 히스토리", page_icon="📜", layout="wide")
 init_page("분석 히스토리")
 sidebar_nav()
 nav_bar("history")
 
-st.title("📜 분석 히스토리")
+st.title(t("history_title"))
 
 db = get_db()
 if db is None:

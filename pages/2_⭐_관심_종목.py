@@ -5,13 +5,14 @@ import pandas as pd
 import streamlit as st
 
 from common import init_page, get_db, nav_bar, sidebar_nav
+from i18n import t
 
 st.set_page_config(page_title="관심 종목", page_icon="⭐", layout="wide")
 init_page("관심 종목")
 sidebar_nav()
 nav_bar("watchlist")
 
-st.title("⭐ 관심 종목")
+st.title(t("watchlist_title"))
 
 db = get_db()
 if db is None:

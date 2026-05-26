@@ -4,6 +4,7 @@ from __future__ import annotations
 import streamlit as st
 
 from common import init_page, get_db, sidebar_nav
+from i18n import t
 
 # ───────────────────────────────────────────────────────
 # 페이지 설정
@@ -22,8 +23,8 @@ sidebar_nav()
 # ───────────────────────────────────────────────────────
 # 메인 페이지
 # ───────────────────────────────────────────────────────
-st.title("📊 분석 대시보드")
-st.markdown("KOSPI/KOSDAQ — 일목균형표 + 백테스팅 + 펀더멘털 종합 분석")
+st.title(t("home_title"))
+st.markdown(t("home_subtitle"))
 
 # DB 연동
 db = get_db()

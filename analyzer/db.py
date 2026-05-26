@@ -177,6 +177,107 @@ def get_history(stock_code: str, limit: int = 30) -> list[dict]:
 
 
 # ───────────────────────────────────────────────────────
+# 추천 종목 (recommendations) — 날짜별 누적
+# ───────────────────────────────────────────────────────
+def save_recommendations(results: dict, session: str = "evening") -> int:
+    """recommend.recommend() 결과를 DB에 저장.
+
+    Args:
+        results: {"large": [...], "mid": [...], "small": [...]}
+        session: 'morning' / 'intraday' / 'evening'
+
+    Returns:
+        저장된 행 수
+    """
+    from datetime import date as _date
+    client = get_client()
+    if not client:
+        return 0
+
+    today = _date.today().isoformat()
+    rows = []
+    for tier in ["large", "mid", "small"]:
+        for rank, stock in enumerate(results.get(tier, []), 1):
+            rows.append({
+                "recommended_date": today,
+                "session": session,
+                "tier": tier,
+                "rank_in_tier": rank,
+                "stock_code": stock.get("code"),
+                "stock_name": stock.get("name"),
+                "score": _safe_num(stock.get("score")),
+                "price": _safe_num(stock.get("price")),
+                "change_pct": _safe_num(stock.get("change_pct")),
+                "market_cap_eok": int(stock.get("market_cap_eok") or 0) or None,
+                "foreign_5d": int(stock.get("foreign_5d") or 0) or None,
+                "inst_5d": int(stock.get("inst_5d") or 0) or None,
+                "signals": _json_safe(stock.get("signals") or []),
+            })
+    if not rows:
+        return 0
+    # upsert (같은 날짜+세션+tier+종목 중복 방지)
+    client.table("recommendations").upsert(
+        rows, on_conflict="recommended_date,session,tier,stock_code"
+    ).execute()
+    return len(rows)
+
+
+def list_recommendations(
+    target_date: str | None = None,
+    session: str | None = None,
+    limit: int = 100,
+) -> list[dict]:
+    """추천 종목 조회.
+
+    Args:
+        target_date: 'YYYY-MM-DD' (None이면 가장 최근 날짜)
+        session: 'morning' / 'intraday' / 'evening' (None이면 모두)
+    """
+    client = get_client()
+    if not client:
+        return []
+
+    if target_date is None:
+        # 가장 최근 추천 날짜
+        res = (
+            client.table("recommendations")
+            .select("recommended_date")
+            .order("recommended_date", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if not res.data:
+            return []
+        target_date = res.data[0]["recommended_date"]
+
+    q = (
+        client.table("recommendations")
+        .select("*")
+        .eq("recommended_date", target_date)
+    )
+    if session:
+        q = q.eq("session", session)
+    res = q.order("tier").order("rank_in_tier").limit(limit).execute()
+    return res.data or []
+
+
+def list_recommendation_dates(limit: int = 30) -> list[str]:
+    """저장된 추천 날짜 목록 (최근 N개)."""
+    client = get_client()
+    if not client:
+        return []
+    res = (
+        client.table("recommendations")
+        .select("recommended_date")
+        .order("recommended_date", desc=True)
+        .limit(1000)
+        .execute()
+    )
+    dates = sorted({r["recommended_date"] for r in (res.data or [])}, reverse=True)
+    return dates[:limit]
+
+
+# ───────────────────────────────────────────────────────
 # 유틸
 # ───────────────────────────────────────────────────────
 def _safe_num(x) -> Optional[float]:

@@ -39,22 +39,25 @@ def require_password():
     if st.session_state.get("authenticated"):
         return True
 
-    st.title("🔒 분석 대시보드")
-    st.markdown("비밀번호를 입력하세요.")
+    from i18n import t, language_selector
+    language_selector("main")  # 로그인 화면에도 언어 선택
+
+    st.title(t("auth_title"))
+    st.markdown(t("auth_prompt"))
 
     with st.form("login_form"):
-        password = st.text_input("비밀번호", type="password")
-        submitted = st.form_submit_button("로그인")
+        password = st.text_input(t("auth_password"), type="password")
+        submitted = st.form_submit_button(t("auth_login"))
         if submitted:
             correct_pw = st.secrets.get("app_password", "")
             if not correct_pw:
-                st.error("⚠️ 앱 비밀번호가 설정되지 않았습니다.")
+                st.error(t("auth_no_pw"))
                 st.stop()
             if password == correct_pw:
                 st.session_state["authenticated"] = True
                 st.rerun()
             else:
-                st.error("❌ 비밀번호가 틀렸습니다.")
+                st.error(t("auth_wrong"))
     st.stop()
 
 
@@ -90,12 +93,13 @@ def nav_bar(current_page: str = ""):
     ):
         st.session_state["page_history"].append(current_page)
 
+    from i18n import t
     cols = st.columns([1, 1, 1, 1, 1, 5])
     with cols[0]:
-        if st.button("🏠 홈", use_container_width=True, key=f"nav_home_{current_page}"):
+        if st.button(t("btn_home"), use_container_width=True, key=f"nav_home_{current_page}"):
             st.switch_page("app.py")
     with cols[1]:
-        if st.button("← 뒤로", use_container_width=True, key=f"nav_back_{current_page}"):
+        if st.button(t("btn_back"), use_container_width=True, key=f"nav_back_{current_page}"):
             history = st.session_state.get("page_history", [])
             if len(history) >= 2:
                 history.pop()
@@ -104,13 +108,13 @@ def nav_bar(current_page: str = ""):
             else:
                 st.switch_page("app.py")
     with cols[2]:
-        if st.button("🎯 추천", use_container_width=True, key=f"nav_r_{current_page}"):
+        if st.button(t("btn_recommend_short"), use_container_width=True, key=f"nav_r_{current_page}"):
             st.switch_page("pages/4_🎯_추천_종목.py")
     with cols[3]:
-        if st.button("💼 보유", use_container_width=True, key=f"nav_h_{current_page}"):
+        if st.button(t("btn_holdings_short"), use_container_width=True, key=f"nav_h_{current_page}"):
             st.switch_page("pages/1_💼_보유_종목.py")
     with cols[4]:
-        if st.button("⭐ 관심", use_container_width=True, key=f"nav_w_{current_page}"):
+        if st.button(t("btn_watchlist_short"), use_container_width=True, key=f"nav_w_{current_page}"):
             st.switch_page("pages/2_⭐_관심_종목.py")
 
 
@@ -129,11 +133,13 @@ def _switch_to(page_name: str):
 
 def sidebar_nav():
     """사이드바에 항상 표시되는 페이지 메뉴."""
+    from i18n import t, language_selector
+    language_selector("sidebar")
     with st.sidebar:
-        st.markdown("### 🗺 메뉴")
-        st.page_link("app.py", label="🏠 홈 / 종목 분석", icon=None)
-        st.page_link("pages/4_🎯_추천_종목.py", label="🎯 추천 종목")
-        st.page_link("pages/1_💼_보유_종목.py", label="💼 보유 종목")
-        st.page_link("pages/2_⭐_관심_종목.py", label="⭐ 관심 종목")
-        st.page_link("pages/3_📜_분석_히스토리.py", label="📜 분석 히스토리")
+        st.markdown(f"### {t('menu')}")
+        st.page_link("app.py", label=t("nav_home"), icon=None)
+        st.page_link("pages/4_🎯_추천_종목.py", label=t("nav_recommend"))
+        st.page_link("pages/1_💼_보유_종목.py", label=t("nav_holdings"))
+        st.page_link("pages/2_⭐_관심_종목.py", label=t("nav_watchlist"))
+        st.page_link("pages/3_📜_분석_히스토리.py", label=t("nav_history"))
         st.divider()
