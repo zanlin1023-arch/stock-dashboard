@@ -125,32 +125,40 @@ for w in watchlist:
 
 
 st.subheader(f"{t('watchlist_list')} ({len(rows)})")
-df_display = pd.DataFrame(rows).drop(columns=["id"])
-st.dataframe(df_display, use_container_width=True, hide_index=True)
 
+# 카드 그리드 (2열) — 각 종목에 🔬 분석 버튼
+for i in range(0, len(rows), 2):
+    cols = st.columns(2)
+    for j, r in enumerate(rows[i:i + 2]):
+        with cols[j]:
+            with st.container(border=True):
+                st.markdown(f"**{r['종목']}**")
+                mc1, mc2 = st.columns(2)
+                with mc1:
+                    st.metric(t("current_price"), r["현재가"], r["전일대비"] if r["전일대비"] != "-" else None)
+                with mc2:
+                    if r["태그"] != "-":
+                        st.caption(f"🏷 {r['태그']}")
+                    if r["메모"] != "-":
+                        st.caption(f"💬 {r['메모']}")
 
-# ──────────────────────────────────────────
-# 분석으로 이동
-# ──────────────────────────────────────────
+                bc1, bc2 = st.columns(2)
+                with bc1:
+                    if st.button(f"🔬 {t('detail_analysis')}", key=f"w_ana_{r['id']}", use_container_width=True):
+                        st.session_state["last_query"] = r["종목"].split(" (")[1].rstrip(")")
+                        st.switch_page("pages/5_🔬_종목_분석.py")
+                with bc2:
+                    if st.button(f"🗑 {t('btn_delete')}", key=f"w_del_{r['id']}", use_container_width=True):
+                        try:
+                            db.delete_watch(r["id"])
+                            st.success(t("delete_done"))
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ {e}")
+
 st.divider()
-st.subheader(t("quick_analyze"))
-options = {r["종목"]: r["종목"].split(" (")[1].rstrip(")") for r in rows}
-sel = st.selectbox(t("select_to_analyze"), list(options.keys()))
-if st.button(t("goto_analyze"), type="primary"):
-    st.session_state["last_query"] = options[sel]
-    st.switch_page("app.py")
 
-
-# ──────────────────────────────────────────
-# 삭제
-# ──────────────────────────────────────────
-with st.expander(t("delete_stock")):
-    del_opts = {r["종목"]: r["id"] for r in rows}
-    del_sel = st.selectbox(t("delete_target"), del_opts.keys(), key="watch_del")
-    if st.button(t("btn_delete"), type="secondary", key="watch_del_btn"):
-        try:
-            db.delete_watch(del_opts[del_sel])
-            st.success(t("delete_done"))
-            st.rerun()
-        except Exception as e:
-            st.error(f"❌ {e}")
+# 표 형식도 같이 (한눈에 비교용)
+with st.expander(f"📊 {t('watchlist_list')} (표 보기)"):
+    df_display = pd.DataFrame(rows).drop(columns=["id"])
+    st.dataframe(df_display, use_container_width=True, hide_index=True)

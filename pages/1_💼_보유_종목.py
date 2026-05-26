@@ -88,6 +88,38 @@ with st.expander(t("holdings_add"), expanded=False):
                     for k in ["hold_auto_note", "hold_auto_name", "hold_auto_code"]:
                         st.session_state.pop(k, None)
                     st.success(f"✅ {name} ({code}) 등록 완료")
+
+                    # 신규 등록 즉시 1회 종목 분석 → 히스토리에 저장
+                    with st.spinner(f"🔬 {name} 자동 분석 중..."):
+                        try:
+                            import technical
+                            from chart_ichimoku import (
+                                compute_ichimoku, detect_swing_points,
+                                compute_price_targets, make_decision,
+                            )
+                            df_ana = technical.fetch_ohlcv(code, days=180)
+                            df_ana = technical.add_indicators(df_ana)
+                            df_ana = compute_ichimoku(df_ana)
+                            result = technical.analyze(code, name)
+                            swings = detect_swing_points(df_ana, lookback=min(80, len(df_ana)))
+                            A, B, C = swings["A"]["price"], swings["B"]["price"], swings["C"]["price"]
+                            targets = compute_price_targets(A, B, C)
+                            decision = make_decision(df_ana, swings, targets)
+
+                            tech_for_db = dict(result)
+                            for col in ["tenkan", "kijun", "senkou_a", "senkou_b"]:
+                                if col in df_ana.columns and df_ana[col].notna().any():
+                                    tech_for_db[col] = float(df_ana[col].iloc[-1])
+
+                            saved = db.save_analysis(
+                                code, name, tech_for_db, decision, targets, swings,
+                                snapshot_type="manual",
+                            )
+                            if saved:
+                                st.success(f"📥 분석 히스토리 저장 완료 — {decision.get('action', '')}")
+                        except Exception as ana_err:
+                            st.warning(f"⚠️ 자동 분석 실패 (등록은 완료): {ana_err}")
+
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ 등록 실패: {e}")

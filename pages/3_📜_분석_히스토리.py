@@ -98,24 +98,54 @@ st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
 # ──────────────────────────────────────────
-# 종목별 추이 (선택 시)
+# 종목별 상세 — 일목 차트 + 추이
 # ──────────────────────────────────────────
-if sel != "(전체)" and len(filtered) >= 2:
+if sel != t("filter_all") and filtered:
     st.divider()
-    st.subheader(f"📈 {sel} 추이")
-    trend_df = pd.DataFrame([
-        {
-            "시각": r["analyzed_at"][:10],
-            "현재가": float(r["price"]) if r.get("price") else None,
-            "RSI": float(r["rsi_14"]) if r.get("rsi_14") else None,
-            "N목표": float(r["target_n"]) if r.get("target_n") else None,
-        }
-        for r in filtered if r.get("price")
-    ]).sort_values("시각")
+    sel_code = sel.split("(")[-1].rstrip(")")
+    sel_name = sel.split(" (")[0]
+    st.subheader(f"📈 {sel} — 일목균형표 + 추이")
 
-    if not trend_df.empty:
-        tab1, tab2 = st.tabs(["가격 추이", "RSI 추이"])
-        with tab1:
-            st.line_chart(trend_df.set_index("시각")[["현재가", "N목표"]])
-        with tab2:
-            st.line_chart(trend_df.set_index("시각")["RSI"])
+    # 일목 차트 (실시간 생성)
+    with st.spinner("🔍 최신 일목균형표 차트 생성 중..."):
+        try:
+            import sys
+            from pathlib import Path
+            sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "analyzer"))
+            from chart_ichimoku import render_ichimoku_chart
+            chart_path = render_ichimoku_chart(sel_code, sel_name, days=180)
+            if chart_path and chart_path.exists():
+                st.image(str(chart_path), use_container_width=True)
+            else:
+                st.warning("차트 생성 실패")
+        except Exception as e:
+            st.error(f"⚠️ 차트 실패: {e}")
+
+    # 추이 (2건 이상)
+    if len(filtered) >= 2:
+        trend_df = pd.DataFrame([
+            {
+                "시각": r["analyzed_at"][:10],
+                "현재가": float(r["price"]) if r.get("price") else None,
+                "RSI": float(r["rsi_14"]) if r.get("rsi_14") else None,
+                "N목표": float(r["target_n"]) if r.get("target_n") else None,
+                "전환선": float(r["tenkan"]) if r.get("tenkan") else None,
+                "기준선": float(r["kijun"]) if r.get("kijun") else None,
+            }
+            for r in filtered if r.get("price")
+        ]).sort_values("시각")
+
+        if not trend_df.empty:
+            tab1, tab2, tab3 = st.tabs(["💰 가격 + 목표가", "📊 RSI", "🌥 일목 5선"])
+            with tab1:
+                st.line_chart(trend_df.set_index("시각")[["현재가", "N목표"]])
+            with tab2:
+                st.line_chart(trend_df.set_index("시각")["RSI"])
+                st.caption("70+ 과매수 / 30- 과매도 / 50 중립")
+            with tab3:
+                if trend_df[["전환선", "기준선"]].notna().any().any():
+                    st.line_chart(trend_df.set_index("시각")[["현재가", "전환선", "기준선"]])
+                else:
+                    st.info("일목 데이터가 누적되면 표시 (분석 2회 이상 필요)")
+    else:
+        st.info(f"💡 추이 차트는 같은 종목 분석 2회 이상 누적되면 표시됩니다. 현재 {len(filtered)}건.")
