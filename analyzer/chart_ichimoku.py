@@ -25,13 +25,44 @@ warnings.filterwarnings("ignore")
 
 
 def _setup_korean_font() -> Optional[str]:
-    candidates = ["Malgun Gothic", "NanumGothic", "AppleGothic", "Noto Sans CJK KR"]
+    # Linux(Streamlit Cloud): NanumGothic, Windows: Malgun Gothic
+    candidates = [
+        "NanumGothic", "NanumBarunGothic", "Nanum Gothic",
+        "Malgun Gothic",
+        "AppleGothic", "Apple SD Gothic Neo",
+        "Noto Sans CJK KR", "Noto Sans KR",
+    ]
     available = {f.name for f in font_manager.fontManager.ttflist}
+
+    # fonts-nanum 설치 후 matplotlib font cache 갱신 안 됐을 수 있음 — 재로드 시도
+    if not any(c in available for c in candidates):
+        try:
+            font_manager._load_fontmanager(try_read_cache=False)
+            available = {f.name for f in font_manager.fontManager.ttflist}
+        except Exception:
+            pass
+
     for c in candidates:
         if c in available:
             plt.rcParams["font.family"] = c
             plt.rcParams["axes.unicode_minus"] = False
             return c
+
+    # Fallback: 시스템 ttf 직접 등록
+    import glob
+    for pattern in [
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+        "/usr/share/fonts/truetype/nanum/*.ttf",
+        "/usr/share/fonts/**/NanumGothic*.ttf",
+    ]:
+        for path in glob.glob(pattern, recursive=True):
+            try:
+                font_manager.fontManager.addfont(path)
+                plt.rcParams["font.family"] = "NanumGothic"
+                plt.rcParams["axes.unicode_minus"] = False
+                return f"NanumGothic ({path})"
+            except Exception:
+                continue
     return None
 
 

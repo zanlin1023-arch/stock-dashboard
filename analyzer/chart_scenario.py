@@ -24,15 +24,43 @@ from _utils import REPORTS_DIR, resolve_ticker
 warnings.filterwarnings("ignore")
 
 
-# 한글 폰트 설정 (Windows: Malgun Gothic)
+# 한글 폰트 설정 (Linux: NanumGothic, Windows: Malgun Gothic)
 def _setup_korean_font():
-    candidates = ["Malgun Gothic", "NanumGothic", "AppleGothic", "Noto Sans CJK KR"]
+    candidates = [
+        "NanumGothic", "NanumBarunGothic", "Nanum Gothic",
+        "Malgun Gothic",
+        "AppleGothic", "Apple SD Gothic Neo",
+        "Noto Sans CJK KR", "Noto Sans KR",
+    ]
     available = {f.name for f in font_manager.fontManager.ttflist}
+
+    if not any(c in available for c in candidates):
+        try:
+            font_manager._load_fontmanager(try_read_cache=False)
+            available = {f.name for f in font_manager.fontManager.ttflist}
+        except Exception:
+            pass
+
     for c in candidates:
         if c in available:
             plt.rcParams["font.family"] = c
             plt.rcParams["axes.unicode_minus"] = False
             return c
+
+    import glob
+    for pattern in [
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+        "/usr/share/fonts/truetype/nanum/*.ttf",
+        "/usr/share/fonts/**/NanumGothic*.ttf",
+    ]:
+        for path in glob.glob(pattern, recursive=True):
+            try:
+                font_manager.fontManager.addfont(path)
+                plt.rcParams["font.family"] = "NanumGothic"
+                plt.rcParams["axes.unicode_minus"] = False
+                return f"NanumGothic ({path})"
+            except Exception:
+                continue
     return None
 
 
