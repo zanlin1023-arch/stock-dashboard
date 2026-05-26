@@ -1,256 +1,299 @@
-"""분석 대시보드 - KOSPI/KOSDAQ 일목균형표 + 종합 분석."""
+"""메인 대시보드 — 보유 종목 종합 분석 (포트폴리오 카드)."""
 from __future__ import annotations
+
+import sys
+from pathlib import Path
 
 import streamlit as st
 
 from common import init_page, get_db, sidebar_nav
 from i18n import t
 
-# ───────────────────────────────────────────────────────
-# 페이지 설정
-# ───────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="분석 대시보드",
+    page_title="Dashboard",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-init_page("홈")
+init_page("대시보드")
 sidebar_nav()
 
 
 # ───────────────────────────────────────────────────────
-# 메인 페이지
+# 헤더
 # ───────────────────────────────────────────────────────
-st.title(t("home_title"))
-st.markdown(t("home_subtitle"))
+st.title("📊 " + t("dashboard_title"))
+st.markdown(t("dashboard_subtitle"))
 
-# DB 연동
+
+# ───────────────────────────────────────────────────────
+# DB 체크
+# ───────────────────────────────────────────────────────
 db = get_db()
-_db_available = db is not None
+if db is None:
+    st.error(t("db_disconnected"))
+    st.stop()
 
-# 사이드바: 종목 입력
-with st.sidebar:
-    st.header(t("search_header"))
-    query = st.text_input(
-        t("search_input"),
-        value=st.session_state.get("last_query", ""),
-        placeholder=t("search_placeholder"),
+holdings = db.list_holdings()
+if not holdings:
+    st.info(
+        f"{t('dashboard_no_holdings')}\n\n"
+        f"👉 [💼 보유 종목 페이지](/💼_보유_종목)에서 종목을 추가하면 여기서 종합 분석이 표시됩니다."
     )
-    days = st.slider(t("analyze_period"), 90, 365, 180, step=30)
-    save_to_db = st.checkbox(t("save_to_db"), value=_db_available, disabled=not _db_available)
-    analyze_btn = st.button(t("btn_analyze"), type="primary", use_container_width=True)
+    st.stop()
 
-    st.divider()
-    if _db_available:
-        st.success(t("db_connected"))
-    else:
-        st.warning(t("db_disconnected"))
-    st.caption(f"{t('version')}: 0.3.0")
 
 # ───────────────────────────────────────────────────────
-# 분석 실행
+# 실시간 시세 + 분석 모듈 로드 (캐시)
 # ───────────────────────────────────────────────────────
-if analyze_btn and query:
-    st.session_state["last_query"] = query
+sys.path.insert(0, str(Path(__file__).resolve().parent / "analyzer"))
 
-    with st.spinner(f"'{query}' {t('analyzing')}"):
-        try:
-            # 분석 모듈 로드 (sys.path에 analyzer 추가됨)
-            from _utils import resolve_ticker
-            import technical
-            from chart_ichimoku import (
-                compute_ichimoku,
-                detect_swing_points,
-                compute_price_targets,
-                make_decision,
-                render_ichimoku_chart,
-            )
 
-            code, name = resolve_ticker(query)
-
-            # OHLCV + 일목 계산
-            df = technical.fetch_ohlcv(code, days=days)
-            df = technical.add_indicators(df)
-            df = compute_ichimoku(df)
-
-            # 종합 분석
-            result = technical.analyze(code, name)
-
-            # 일목 분석
-            swings = detect_swing_points(df, lookback=min(80, len(df)))
-            A, B, C = swings["A"]["price"], swings["B"]["price"], swings["C"]["price"]
-            targets = compute_price_targets(A, B, C)
-            decision = make_decision(df, swings, targets)
-
-            # 차트 생성 (PNG)
-            chart_path = render_ichimoku_chart(code, name, days=days)
-
-        except Exception as e:
-            st.error(f"{t('analysis_failed')}: {e}")
-            st.exception(e)
-            st.stop()
-
-    # ───────────────────────────────────────────────────
-    # 결과 표시
-    # ───────────────────────────────────────────────────
-    st.success(f"{t('analysis_complete')}: **{name}** ({code})")
-
-    # 핵심 지표 카드
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric(
-            t("current_price"),
-            f"{result['current_price']:,}",
-            f"{result['daily_return']:+.2f}%",
-        )
-    with col2:
-        st.metric(
-            f"{days}d {t('period_return')}",
-            f"{result['period_return_180d']:+.1f}%",
-        )
-    with col3:
-        if result["rsi_14"]:
-            rsi_status = t("rsi_overbought") if result["rsi_14"] >= 70 else (t("rsi_oversold") if result["rsi_14"] <= 30 else t("rsi_neutral"))
-            st.metric("RSI(14)", f"{result['rsi_14']:.1f}", rsi_status)
-    with col4:
-        st.metric(t("volume"), f"{result['volume']:,}")
-
-    st.divider()
-
-    # 일목 의사결정 박스
-    st.subheader(t("ichimoku_decision"))
-    decision_color = {
-        "STRONG_BUY": "🟢",
-        "BUY": "🟢",
-        "NEUTRAL": "🟡",
-        "SELL": "🟠",
-        "STRONG_SELL": "🔴",
-    }.get(decision["stance"], "⚪")
-
-    st.markdown(f"### {decision_color} {decision['action']}")
-
-    dc1, dc2, dc3 = st.columns(3)
-    with dc1:
-        cloud_txt = {
-            "above": t("cloud_above"),
-            "below": t("cloud_below"),
-            "inside": t("cloud_inside"),
-        }.get(decision["cloud_pos"], "—")
-        st.info(f"**{t('position')}**\n\n{cloud_txt}")
-    with dc2:
-        tk_txt = t("tk_bull") if decision["tk_bull"] else t("tk_bear")
-        st.info(f"**{t('tk_state')}**\n\n{tk_txt}")
-    with dc3:
-        if decision["chikou_ok"] is not None:
-            chikou_txt = t("chikou_above") if decision["chikou_ok"] else t("chikou_below")
-            st.info(f"**{t('chikou')}**\n\n{chikou_txt}")
-
-    # 목표가 + 손절
-    st.subheader(t("price_guide"))
-    current_price = decision["price"]
-
-    target_cols = st.columns(4)
-
-    # V/N/E 목표 (가까운 순 정렬)
-    sorted_targets = sorted(
-        [(k, targets[k]) for k in ["V", "N", "E"]],
-        key=lambda x: x[1],
+@st.cache_data(ttl=300, show_spinner=False)
+def _analyze_one(code: str, name: str) -> dict:
+    """단일 종목 빠른 분석 — 현재가/RSI/일목 위치/의사결정."""
+    import technical
+    from chart_ichimoku import (
+        compute_ichimoku,
+        detect_swing_points,
+        compute_price_targets,
+        make_decision,
     )
-    target_meta = {"V": t("target_v"), "N": t("target_n"), "E": t("target_e")}
 
-    above = [(k, v) for k, v in sorted_targets if v > current_price]
-    for i, (k, v) in enumerate(above[:3]):
-        pct = (v / current_price - 1) * 100
-        with target_cols[i]:
-            st.metric(
-                f"🎯 {k} ({target_meta[k]})",
-                f"{v:,.0f}",
-                f"{pct:+.1f}%",
-            )
+    try:
+        df = technical.fetch_ohlcv(code, days=90)
+        df = technical.add_indicators(df)
+        df = compute_ichimoku(df)
+        last = df.iloc[-1]
+        prev = df.iloc[-2] if len(df) > 1 else last
 
-    if decision["stop"]:
-        with target_cols[3]:
-            stop_name, stop_val = decision["stop"]
-            pct = (stop_val / current_price - 1) * 100
-            st.metric(
-                f"{t('stop_loss')} ({stop_name})",
-                f"{stop_val:,.0f}",
-                f"{pct:+.1f}%",
-                delta_color="inverse",
-            )
+        price = float(last["close"])
+        prev_price = float(prev["close"])
+        change_pct = (price / prev_price - 1) * 100 if prev_price else 0.0
+        rsi = float(last["rsi_14"]) if "rsi_14" in df.columns and last["rsi_14"] == last["rsi_14"] else None
 
-    # 일목 차트
-    st.subheader(t("ichimoku_chart"))
-    if chart_path and chart_path.exists():
-        st.image(str(chart_path), use_container_width=True)
-    else:
-        st.warning(t("chart_failed"))
+        # 일목
+        swings = detect_swing_points(df, lookback=min(80, len(df)))
+        A, B, C = swings["A"]["price"], swings["B"]["price"], swings["C"]["price"]
+        targets = compute_price_targets(A, B, C)
+        decision = make_decision(df, swings, targets)
 
-    # DB 저장
-    if save_to_db and _db_available and db is not None:
-        try:
-            tech_for_db = dict(result)
-            tech_for_db.update({
-                "tenkan": float(df["tenkan"].iloc[-1]) if df["tenkan"].notna().any() else None,
-                "kijun": float(df["kijun"].iloc[-1]) if df["kijun"].notna().any() else None,
-                "senkou_a": float(df["senkou_a"].iloc[-1]) if df["senkou_a"].notna().any() else None,
-                "senkou_b": float(df["senkou_b"].iloc[-1]) if df["senkou_b"].notna().any() else None,
-            })
-            saved = db.save_analysis(code, name, tech_for_db, decision, targets, swings)
-            if saved:
-                st.success(f"{t('db_save_done')} (id: {saved.get('id')})")
-        except Exception as e:
-            st.warning(f"⚠️ {e}")
-
-    # 관심종목 추가 버튼
-    if _db_available and db is not None:
-        wcol1, wcol2 = st.columns([1, 5])
-        with wcol1:
-            if st.button(t("add_to_watch"), use_container_width=True):
-                try:
-                    db.add_watch(code, name)
-                    st.success(f"{t('add_to_watch_done')}: {name}")
-                except Exception as e:
-                    st.error(f"❌ {e}")
-
-    # 시그널 목록
-    st.subheader(t("signals"))
-    for sig in result.get("signals", []):
-        st.markdown(f"- {sig}")
-
-    # 이동평균 표
-    with st.expander(t("moving_averages")):
-        ma_data = {
-            "기간": ["5일선", "20일선", "60일선", "120일선"],
-            "값": [
-                f"{result['sma_5']:,.0f}원" if result["sma_5"] else "-",
-                f"{result['sma_20']:,.0f}원" if result["sma_20"] else "-",
-                f"{result['sma_60']:,.0f}원" if result["sma_60"] else "-",
-                f"{result['sma_120']:,.0f}원" if result["sma_120"] else "-",
-            ],
+        return {
+            "code": code,
+            "name": name,
+            "price": price,
+            "change_pct": change_pct,
+            "rsi": rsi,
+            "cloud_pos": decision.get("cloud_pos"),
+            "stance": decision.get("stance"),
+            "action": decision.get("action"),
+            "target_n": targets.get("N"),
+            "stop": decision.get("stop"),
+            "tk_bull": decision.get("tk_bull"),
+            "ok": True,
         }
-        st.table(ma_data)
+    except Exception as e:
+        return {"code": code, "name": name, "ok": False, "error": str(e)}
 
-    # 파동 정보
-    with st.expander(t("ichimoku_wave")):
-        st.markdown(
-            f"""
-            - **A (시작 저점)**: {swings['A']['price']:,.0f}원 ({swings['A']['date'].strftime('%Y-%m-%d')})
-            - **B (고점)**: {swings['B']['price']:,.0f}원 ({swings['B']['date'].strftime('%Y-%m-%d')})
-            - **C (조정 저점)**: {swings['C']['price']:,.0f}원 ({swings['C']['date'].strftime('%Y-%m-%d')})
-            - **C 형성 여부**: {'✅ 형성' if swings.get('c_formed') else '⚠️ 미형성 (신규 추세 진행 중)'}
 
-            **파동론 공식**:
-            - V = B + (B − C) = {targets['V']:,.0f}
-            - N = C + (B − A) = {targets['N']:,.0f}
-            - E = B + (B − A) = {targets['E']:,.0f}
-            """
+with st.spinner(t("dashboard_loading")):
+    analyses = []
+    for h in holdings:
+        a = _analyze_one(h["stock_code"], h["stock_name"])
+        a["avg_price"] = float(h["avg_price"])
+        a["quantity"] = int(h["quantity"])
+        analyses.append(a)
+
+
+# ───────────────────────────────────────────────────────
+# 1단 — 포트폴리오 요약 (4 메트릭)
+# ───────────────────────────────────────────────────────
+total_buy = 0.0
+total_eval = 0.0
+for a in analyses:
+    qty = a.get("quantity", 1)
+    avg = a.get("avg_price", 0)
+    cur = a.get("price") or avg
+    total_buy += avg * qty
+    total_eval += cur * qty
+
+total_pnl = total_eval - total_buy
+total_pnl_pct = (total_pnl / total_buy * 100) if total_buy else 0.0
+
+c1, c2, c3, c4 = st.columns(4)
+c1.metric(t("total_buy"), f"{total_buy:,.0f}")
+c2.metric(t("total_eval"), f"{total_eval:,.0f}")
+c3.metric(t("total_pnl"), f"{total_pnl:+,.0f}", delta_color="normal")
+c4.metric(t("pnl_pct"), f"{total_pnl_pct:+.2f}%")
+
+st.divider()
+
+
+# ───────────────────────────────────────────────────────
+# 2단 — 베스트/워스트 + 종목별 비중 파이차트
+# ───────────────────────────────────────────────────────
+col_left, col_right = st.columns([1, 1])
+
+# 종목별 손익률 계산
+per_stock = []
+for a in analyses:
+    if not a.get("ok"):
+        continue
+    avg = a["avg_price"]
+    cur = a.get("price") or avg
+    qty = a.get("quantity", 1)
+    pnl_pct = (cur / avg - 1) * 100 if avg else 0.0
+    eval_amount = cur * qty
+    buy_amount = avg * qty
+    per_stock.append({
+        "name": a["name"],
+        "code": a["code"],
+        "pnl_pct": pnl_pct,
+        "eval_amount": eval_amount,
+        "buy_amount": buy_amount,
+        "rsi": a.get("rsi"),
+        "cloud_pos": a.get("cloud_pos"),
+        "stance": a.get("stance"),
+        "action": a.get("action"),
+        "target_n": a.get("target_n"),
+        "tk_bull": a.get("tk_bull"),
+        "price": a.get("price"),
+        "avg_price": avg,
+    })
+
+sorted_pnl = sorted(per_stock, key=lambda x: -x["pnl_pct"])
+
+with col_left:
+    st.subheader("🏆 " + t("best_worst"))
+    if sorted_pnl:
+        st.markdown(f"**🥇 {t('best')}**")
+        for s in sorted_pnl[:3]:
+            color = "🟢" if s["pnl_pct"] >= 0 else "🔴"
+            st.markdown(f"  {color} **{s['name']}**  `{s['pnl_pct']:+.2f}%`")
+        if len(sorted_pnl) >= 4:
+            st.markdown(f"**💔 {t('worst')}**")
+            for s in sorted_pnl[-2:]:
+                color = "🟢" if s["pnl_pct"] >= 0 else "🔴"
+                st.markdown(f"  {color} **{s['name']}**  `{s['pnl_pct']:+.2f}%`")
+
+with col_right:
+    st.subheader("🥧 " + t("portfolio_weight"))
+    import pandas as pd
+    weights = pd.DataFrame([
+        {"종목": s["name"], "평가금액": s["eval_amount"]}
+        for s in per_stock
+    ])
+    if not weights.empty:
+        # Streamlit native 파이차트 대신 matplotlib
+        import matplotlib.pyplot as plt
+        from matplotlib import font_manager
+
+        # 한글 폰트
+        for fn in ["Malgun Gothic", "NanumGothic", "AppleGothic"]:
+            try:
+                if any(f.name == fn for f in font_manager.fontManager.ttflist):
+                    plt.rcParams["font.family"] = fn
+                    break
+            except Exception:
+                pass
+
+        fig, ax = plt.subplots(figsize=(5, 5))
+        colors = plt.cm.Pastel1(range(len(weights)))
+        ax.pie(
+            weights["평가금액"],
+            labels=weights["종목"],
+            autopct="%1.1f%%",
+            startangle=90,
+            colors=colors,
+            textprops={"fontsize": 10},
         )
+        ax.axis("equal")
+        st.pyplot(fig)
+        plt.close(fig)
 
+st.divider()
+
+
+# ───────────────────────────────────────────────────────
+# 3단 — 종목별 수익률 막대차트
+# ───────────────────────────────────────────────────────
+st.subheader("📊 " + t("per_stock_returns"))
+if per_stock:
+    import pandas as pd
+    bar_df = pd.DataFrame([
+        {"종목": s["name"], "수익률(%)": round(s["pnl_pct"], 2)}
+        for s in sorted_pnl
+    ]).set_index("종목")
+    st.bar_chart(bar_df, height=250)
+
+st.divider()
+
+
+# ───────────────────────────────────────────────────────
+# 4단 — 주의 종목 자동 감지
+# ───────────────────────────────────────────────────────
+st.subheader("🚨 " + t("alerts"))
+alerts = []
+for s in per_stock:
+    # RSI 극단
+    if s["rsi"] is not None:
+        if s["rsi"] >= 80:
+            alerts.append(("🔴", s["name"], f"RSI {s['rsi']:.1f} — {t('alert_overbought')}"))
+        elif s["rsi"] <= 25:
+            alerts.append(("🟢", s["name"], f"RSI {s['rsi']:.1f} — {t('alert_oversold')}"))
+    # 구름 아래 + TK 데드
+    if s["cloud_pos"] == "below" and not s.get("tk_bull"):
+        alerts.append(("⚠️", s["name"], t("alert_bearish_full")))
+    # 큰 손실
+    if s["pnl_pct"] <= -10:
+        alerts.append(("🔻", s["name"], f"손익 {s['pnl_pct']:+.1f}% — {t('alert_review_stop')}"))
+    # 큰 수익
+    if s["pnl_pct"] >= 20:
+        alerts.append(("🎯", s["name"], f"손익 {s['pnl_pct']:+.1f}% — {t('alert_take_profit')}"))
+
+if not alerts:
+    st.success(t("no_alerts"))
 else:
-    # 첫 화면 (분석 전)
-    st.info(t("intro_prompt"))
-    st.markdown("---")
-    st.caption(t("disclaimer"))
+    for emoji, name, msg in alerts:
+        st.markdown(f"- {emoji} **{name}** — {msg}")
+
+
+st.divider()
+
+
+# ───────────────────────────────────────────────────────
+# 5단 — 보유 목록 미니 카드 (요약)
+# ───────────────────────────────────────────────────────
+st.subheader("📋 " + t("holdings_summary"))
+
+# 보유 종목 카드 2x3 그리드
+for i in range(0, len(per_stock), 3):
+    cols = st.columns(3)
+    for j, s in enumerate(per_stock[i:i + 3]):
+        with cols[j]:
+            with st.container(border=True):
+                st.markdown(f"**{s['name']}**  `{s['code']}`")
+                if s.get("price"):
+                    pnl_color = "🟢" if s["pnl_pct"] >= 0 else "🔴"
+                    st.metric(
+                        t("current_price"),
+                        f"{int(s['price']):,}",
+                        f"{s['pnl_pct']:+.2f}% {pnl_color}",
+                    )
+                cloud_emoji = {"above": "📈", "below": "📉", "inside": "➖"}.get(s.get("cloud_pos"), "")
+                rsi_txt = f"RSI {s['rsi']:.0f}" if s.get("rsi") else ""
+                tk_txt = "TK✅" if s.get("tk_bull") else "TK⚠️"
+                st.caption(f"{cloud_emoji} {rsi_txt} · {tk_txt}")
+                if s.get("action"):
+                    st.caption(f"💡 {s['action']}")
+                if st.button(f"🔬 " + t("detail_analysis"), key=f"dash_anly_{s['code']}", use_container_width=True):
+                    st.session_state["last_query"] = s["name"]
+                    st.switch_page("pages/5_🔬_종목_분석.py")
+
+
+# 푸터
+st.divider()
+st.caption(
+    f"⚡ {t('dashboard_footer_hint')}"
+)

@@ -122,6 +122,8 @@ def _switch_to(page_name: str):
     """페이지명 → 파일 경로 매핑 후 switch_page."""
     mapping = {
         "home": "app.py",
+        "dashboard": "app.py",
+        "analyze": "pages/5_🔬_종목_분석.py",
         "holdings": "pages/1_💼_보유_종목.py",
         "watchlist": "pages/2_⭐_관심_종목.py",
         "history": "pages/3_📜_분석_히스토리.py",
@@ -137,7 +139,8 @@ def sidebar_nav():
     language_selector("sidebar")
     with st.sidebar:
         st.markdown(f"### {t('menu')}")
-        st.page_link("app.py", label=t("nav_home"), icon=None)
+        st.page_link("app.py", label=t("nav_dashboard"), icon=None)
+        st.page_link("pages/5_🔬_종목_분석.py", label=t("nav_analyze"))
         st.page_link("pages/4_🎯_추천_종목.py", label=t("nav_recommend"))
         st.page_link("pages/1_💼_보유_종목.py", label=t("nav_holdings"))
         st.page_link("pages/2_⭐_관심_종목.py", label=t("nav_watchlist"))
