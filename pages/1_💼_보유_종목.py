@@ -25,26 +25,73 @@ if db is None:
 # 신규 등록
 # ──────────────────────────────────────────
 with st.expander("➕ 보유 종목 추가", expanded=False):
+    # 종목명 + 자동 채우기 (form 밖)
+    qc1, qc2 = st.columns([3, 1])
+    with qc1:
+        query_outside = st.text_input(
+            "종목명 또는 종목코드",
+            key="hold_query",
+            placeholder="예: 삼성전자 또는 005930",
+        )
+    with qc2:
+        st.write("")
+        st.write("")
+        auto_btn = st.button("🔮 자동 채우기", use_container_width=True, key="hold_autofill")
+
+    if auto_btn and query_outside.strip():
+        with st.spinner("종목 정보 수집 중..."):
+            try:
+                from _utils import resolve_ticker
+                from enrich import enrich_stock
+                code, name = resolve_ticker(query_outside.strip())
+                info = enrich_stock(code, name)
+                st.session_state["hold_auto_note"] = info.get("memo", "")
+                st.session_state["hold_auto_name"] = name
+                st.session_state["hold_auto_code"] = code
+                src_emoji = {"claude": "🤖", "openai": "🤖", "naver": "🌐", "fdr": "📊"}.get(info.get("source"), "📋")
+                st.success(f"{src_emoji} {name} ({code}) | 출처: {info.get('source')}")
+            except Exception as e:
+                st.error(f"자동 채우기 실패: {e}")
+
     with st.form("add_holding"):
         col1, col2 = st.columns(2)
         with col1:
-            query = st.text_input("종목명 또는 종목코드", placeholder="예: 삼성전자 또는 005930")
             avg_price = st.number_input("평단가 (원)", min_value=1, value=10000, step=100)
         with col2:
             quantity = st.number_input("수량", min_value=1, value=10, step=1)
-            purchase_date = st.date_input("매수일", value=date.today())
-        note = st.text_input("메모 (선택)", placeholder="예: 분할매수 1차")
+        col3, col4 = st.columns(2)
+        with col3:
+            date_unknown = st.checkbox("매수일 모름", value=False)
+        with col4:
+            purchase_date = st.date_input(
+                "매수일 (선택)",
+                value=date.today(),
+                disabled=date_unknown,
+                help="모르면 체크박스 활성화 — 오늘 날짜로 자동 등록되며 손익 계산엔 영향 없음.",
+            )
+        note = st.text_input(
+            "메모 (선택)",
+            value=st.session_state.get("hold_auto_note", ""),
+            placeholder="예: 분할매수 1차",
+        )
         submitted = st.form_submit_button("💾 등록", type="primary")
 
-        if submitted and query.strip():
-            try:
-                from _utils import resolve_ticker
-                code, name = resolve_ticker(query.strip())
-                row = db.add_holding(code, name, avg_price, quantity, purchase_date, note)
-                st.success(f"✅ {name} ({code}) 등록 완료")
-                st.rerun()
-            except Exception as e:
-                st.error(f"❌ 등록 실패: {e}")
+        if submitted:
+            target_query = query_outside.strip() or st.session_state.get("hold_auto_name", "")
+            if not target_query:
+                st.warning("종목명을 입력하세요")
+            else:
+                try:
+                    from _utils import resolve_ticker
+                    code, name = resolve_ticker(target_query)
+                    use_date = None if date_unknown else purchase_date
+                    db.add_holding(code, name, avg_price, quantity, use_date, note)
+                    for k in ["hold_auto_note", "hold_auto_name", "hold_auto_code"]:
+                        st.session_state.pop(k, None)
+                    st.success(f"✅ {name} ({code}) 등록 완료")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ 등록 실패: {e}")
 
 
 # ──────────────────────────────────────────

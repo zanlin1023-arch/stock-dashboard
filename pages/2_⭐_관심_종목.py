@@ -20,25 +20,70 @@ if db is None:
 
 
 # ──────────────────────────────────────────
-# 신규 추가
+# 신규 추가 — 자동 채우기 지원
 # ──────────────────────────────────────────
 with st.expander("➕ 관심 종목 추가", expanded=False):
-    with st.form("add_watch"):
-        query = st.text_input("종목명 또는 종목코드", placeholder="예: 삼성전자")
-        note = st.text_input("메모 (선택)", placeholder="예: AI MLCC 테마")
-        tags_input = st.text_input("태그 (쉼표 구분, 선택)", placeholder="예: 반도체, AI, 6G")
-        submitted = st.form_submit_button("⭐ 추가", type="primary")
+    # 종목명 + 자동 채우기 버튼 (form 밖 — 즉시 응답)
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        query_outside = st.text_input(
+            "종목명 또는 종목코드",
+            key="watch_query",
+            placeholder="예: 삼성전자",
+        )
+    with c2:
+        st.write("")  # 정렬용
+        st.write("")
+        auto_fill = st.button("🔮 자동 채우기", use_container_width=True, key="watch_autofill")
 
-        if submitted and query.strip():
+    # 자동 채우기 트리거
+    if auto_fill and query_outside.strip():
+        with st.spinner("종목 정보 수집 중..."):
             try:
                 from _utils import resolve_ticker
-                code, name = resolve_ticker(query.strip())
-                tags = [t.strip() for t in tags_input.split(",") if t.strip()]
-                db.add_watch(code, name, note, tags)
-                st.success(f"✅ {name} ({code}) 추가됨")
-                st.rerun()
+                from enrich import enrich_stock
+                code, name = resolve_ticker(query_outside.strip())
+                info = enrich_stock(code, name)
+                st.session_state["watch_auto_memo"] = info.get("memo", "")
+                st.session_state["watch_auto_tags"] = ", ".join(info.get("themes") or [])
+                st.session_state["watch_auto_code"] = code
+                st.session_state["watch_auto_name"] = name
+                src_emoji = {"claude": "🤖", "openai": "🤖", "naver": "🌐", "fdr": "📊"}.get(info.get("source"), "📋")
+                st.success(f"{src_emoji} {name} ({code}) | 출처: {info.get('source')}")
             except Exception as e:
-                st.error(f"❌ 추가 실패: {e}")
+                st.error(f"자동 채우기 실패: {e}")
+
+    # 폼 (자동 채우기 결과를 디폴트로)
+    with st.form("add_watch"):
+        note = st.text_input(
+            "메모 (선택)",
+            value=st.session_state.get("watch_auto_memo", ""),
+            placeholder="예: AI MLCC 테마",
+        )
+        tags_input = st.text_input(
+            "태그 (쉼표 구분, 선택)",
+            value=st.session_state.get("watch_auto_tags", ""),
+            placeholder="예: 반도체, AI, 6G",
+        )
+        submitted = st.form_submit_button("⭐ 추가", type="primary")
+
+        if submitted:
+            target_query = query_outside.strip() or st.session_state.get("watch_auto_name", "")
+            if not target_query:
+                st.warning("종목명을 입력하세요")
+            else:
+                try:
+                    from _utils import resolve_ticker
+                    code, name = resolve_ticker(target_query)
+                    tags = [t.strip() for t in tags_input.split(",") if t.strip()]
+                    db.add_watch(code, name, note, tags)
+                    # 자동 채우기 세션 정리
+                    for k in ["watch_auto_memo", "watch_auto_tags", "watch_auto_code", "watch_auto_name"]:
+                        st.session_state.pop(k, None)
+                    st.success(f"✅ {name} ({code}) 추가됨")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ 추가 실패: {e}")
 
 
 # ──────────────────────────────────────────

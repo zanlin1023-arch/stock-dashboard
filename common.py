@@ -12,6 +12,8 @@ def setup_environment():
     """Streamlit secrets → os.environ 주입 (analyzer 모듈이 os.getenv 사용)."""
     secret_keys = [
         "OPENDART_API_KEY",
+        "ANTHROPIC_API_KEY",  # 종목 자동 채우기 (Claude)
+        "OPENAI_API_KEY",     # 종목 자동 채우기 (대안)
         "SUPABASE_URL",
         "SUPABASE_KEY",
         "SUPABASE_PUBLISHABLE_KEY",
