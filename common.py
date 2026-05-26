@@ -90,7 +90,7 @@ def nav_bar(current_page: str = ""):
     ):
         st.session_state["page_history"].append(current_page)
 
-    cols = st.columns([1, 1, 1, 1, 6])
+    cols = st.columns([1, 1, 1, 1, 1, 5])
     with cols[0]:
         if st.button("🏠 홈", use_container_width=True, key=f"nav_home_{current_page}"):
             st.switch_page("app.py")
@@ -98,16 +98,18 @@ def nav_bar(current_page: str = ""):
         if st.button("← 뒤로", use_container_width=True, key=f"nav_back_{current_page}"):
             history = st.session_state.get("page_history", [])
             if len(history) >= 2:
-                # 현재 페이지 제거하고 이전으로
                 history.pop()
                 prev = history.pop()
                 _switch_to(prev)
             else:
                 st.switch_page("app.py")
     with cols[2]:
+        if st.button("🎯 추천", use_container_width=True, key=f"nav_r_{current_page}"):
+            st.switch_page("pages/4_🎯_추천_종목.py")
+    with cols[3]:
         if st.button("💼 보유", use_container_width=True, key=f"nav_h_{current_page}"):
             st.switch_page("pages/1_💼_보유_종목.py")
-    with cols[3]:
+    with cols[4]:
         if st.button("⭐ 관심", use_container_width=True, key=f"nav_w_{current_page}"):
             st.switch_page("pages/2_⭐_관심_종목.py")
 
@@ -119,6 +121,7 @@ def _switch_to(page_name: str):
         "holdings": "pages/1_💼_보유_종목.py",
         "watchlist": "pages/2_⭐_관심_종목.py",
         "history": "pages/3_📜_분석_히스토리.py",
+        "recommend": "pages/4_🎯_추천_종목.py",
     }
     target = mapping.get(page_name, "app.py")
     st.switch_page(target)
@@ -129,6 +132,7 @@ def sidebar_nav():
     with st.sidebar:
         st.markdown("### 🗺 메뉴")
         st.page_link("app.py", label="🏠 홈 / 종목 분석", icon=None)
+        st.page_link("pages/4_🎯_추천_종목.py", label="🎯 추천 종목")
         st.page_link("pages/1_💼_보유_종목.py", label="💼 보유 종목")
         st.page_link("pages/2_⭐_관심_종목.py", label="⭐ 관심 종목")
         st.page_link("pages/3_📜_분석_히스토리.py", label="📜 분석 히스토리")
