@@ -16,30 +16,28 @@ st.title(t("watchlist_title"))
 
 db = get_db()
 if db is None:
-    st.error("⚠️ Supabase DB 미연결.")
+    st.error(t("db_disconnected"))
     st.stop()
 
 
 # ──────────────────────────────────────────
 # 신규 추가 — 자동 채우기 지원
 # ──────────────────────────────────────────
-with st.expander("➕ 관심 종목 추가", expanded=False):
-    # 종목명 + 자동 채우기 버튼 (form 밖 — 즉시 응답)
+with st.expander(t("watchlist_add"), expanded=False):
     c1, c2 = st.columns([3, 1])
     with c1:
         query_outside = st.text_input(
-            "종목명 또는 종목코드",
+            t("search_input"),
             key="watch_query",
-            placeholder="예: 삼성전자",
+            placeholder=t("search_placeholder"),
         )
     with c2:
-        st.write("")  # 정렬용
         st.write("")
-        auto_fill = st.button("🔮 자동 채우기", use_container_width=True, key="watch_autofill")
+        st.write("")
+        auto_fill = st.button(t("btn_autofill"), use_container_width=True, key="watch_autofill")
 
-    # 자동 채우기 트리거
     if auto_fill and query_outside.strip():
-        with st.spinner("종목 정보 수집 중..."):
+        with st.spinner(t("autofill_loading")):
             try:
                 from _utils import resolve_ticker
                 from enrich import enrich_stock
@@ -54,19 +52,16 @@ with st.expander("➕ 관심 종목 추가", expanded=False):
             except Exception as e:
                 st.error(f"자동 채우기 실패: {e}")
 
-    # 폼 (자동 채우기 결과를 디폴트로)
     with st.form("add_watch"):
         note = st.text_input(
-            "메모 (선택)",
+            t("note_optional"),
             value=st.session_state.get("watch_auto_memo", ""),
-            placeholder="예: AI MLCC 테마",
         )
         tags_input = st.text_input(
-            "태그 (쉼표 구분, 선택)",
+            t("tags_optional"),
             value=st.session_state.get("watch_auto_tags", ""),
-            placeholder="예: 반도체, AI, 6G",
         )
-        submitted = st.form_submit_button("⭐ 추가", type="primary")
+        submitted = st.form_submit_button(t("add_to_watch"), type="primary")
 
         if submitted:
             target_query = query_outside.strip() or st.session_state.get("watch_auto_name", "")
@@ -93,7 +88,7 @@ with st.expander("➕ 관심 종목 추가", expanded=False):
 watchlist = db.list_watchlist()
 
 if not watchlist:
-    st.info("관심 종목이 없습니다. 위에서 추가하거나 종목 분석 화면에서 ⭐ 버튼으로 추가하세요.")
+    st.info(t("watchlist_empty"))
     st.stop()
 
 
@@ -129,7 +124,7 @@ for w in watchlist:
     })
 
 
-st.subheader(f"📋 관심 목록 ({len(rows)}개)")
+st.subheader(f"{t('watchlist_list')} ({len(rows)})")
 df_display = pd.DataFrame(rows).drop(columns=["id"])
 st.dataframe(df_display, use_container_width=True, hide_index=True)
 
@@ -138,10 +133,10 @@ st.dataframe(df_display, use_container_width=True, hide_index=True)
 # 분석으로 이동
 # ──────────────────────────────────────────
 st.divider()
-st.subheader("🔬 빠른 분석")
+st.subheader(t("quick_analyze"))
 options = {r["종목"]: r["종목"].split(" (")[1].rstrip(")") for r in rows}
-sel = st.selectbox("분석할 종목 선택", list(options.keys()))
-if st.button("🚀 분석 페이지로 이동", type="primary"):
+sel = st.selectbox(t("select_to_analyze"), list(options.keys()))
+if st.button(t("goto_analyze"), type="primary"):
     st.session_state["last_query"] = options[sel]
     st.switch_page("app.py")
 
@@ -149,13 +144,13 @@ if st.button("🚀 분석 페이지로 이동", type="primary"):
 # ──────────────────────────────────────────
 # 삭제
 # ──────────────────────────────────────────
-with st.expander("🗑 종목 삭제"):
+with st.expander(t("delete_stock")):
     del_opts = {r["종목"]: r["id"] for r in rows}
-    del_sel = st.selectbox("삭제할 종목", del_opts.keys(), key="watch_del")
-    if st.button("삭제", type="secondary", key="watch_del_btn"):
+    del_sel = st.selectbox(t("delete_target"), del_opts.keys(), key="watch_del")
+    if st.button(t("btn_delete"), type="secondary", key="watch_del_btn"):
         try:
             db.delete_watch(del_opts[del_sel])
-            st.success("✅ 삭제 완료")
+            st.success(t("delete_done"))
             st.rerun()
         except Exception as e:
-            st.error(f"❌ 삭제 실패: {e}")
+            st.error(f"❌ {e}")

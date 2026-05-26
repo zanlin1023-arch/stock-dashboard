@@ -39,7 +39,7 @@ st.caption(f"🕐 현재 한국 시각: **{now.strftime('%Y-%m-%d %H:%M')}** —
 # ──────────────────────────────────────────
 db = get_db()
 if not db:
-    st.error("⚠️ Supabase DB 미연결 — 추천 종목 페이지는 DB가 필요합니다.")
+    st.error(t("db_disconnected"))
     st.stop()
 
 # 저장된 날짜 목록

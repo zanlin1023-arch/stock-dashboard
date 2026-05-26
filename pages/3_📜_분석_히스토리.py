@@ -16,7 +16,7 @@ st.title(t("history_title"))
 
 db = get_db()
 if db is None:
-    st.error("⚠️ Supabase DB 미연결.")
+    st.error(t("db_disconnected"))
     st.stop()
 
 
@@ -33,7 +33,7 @@ res = client.table("analysis_history").select("*").order("analyzed_at", desc=Tru
 all_records = res.data or []
 
 if not all_records:
-    st.info("저장된 분석 히스토리가 없습니다. 종목 분석 시 사이드바 '📥 결과를 DB에 저장' 체크하면 누적됩니다.")
+    st.info(t("history_empty"))
     st.stop()
 
 
@@ -41,24 +41,21 @@ if not all_records:
 fcol1, fcol2 = st.columns([2, 1])
 with fcol1:
     codes = sorted({(r["stock_code"], r["stock_name"]) for r in all_records}, key=lambda x: x[1])
-    options = ["(전체)"] + [f"{name} ({code})" for code, name in codes]
-    sel = st.selectbox("📌 종목 필터", options)
+    options = [t("filter_all")] + [f"{name} ({code})" for code, name in codes]
+    sel = st.selectbox(t("filter_stock"), options)
 
 with fcol2:
-    snapshot_filter = st.selectbox(
-        "🔄 스냅샷 종류",
-        ["전체", "수동 (manual)", "자동 (scheduled)"],
-        help="manual: 분석 페이지에서 직접 저장 / scheduled: 매일 18:00 자동 누적",
-    )
+    snapshot_options = [t("snapshot_all"), t("snapshot_manual"), t("snapshot_scheduled")]
+    snapshot_filter = st.selectbox(t("filter_snapshot"), snapshot_options)
 
 filtered = all_records
-if sel != "(전체)":
+if sel != t("filter_all"):
     sel_code = sel.split("(")[-1].rstrip(")")
     filtered = [r for r in filtered if r["stock_code"] == sel_code]
 
-if snapshot_filter == "수동 (manual)":
+if snapshot_filter == t("snapshot_manual"):
     filtered = [r for r in filtered if r.get("snapshot_type") == "manual"]
-elif snapshot_filter == "자동 (scheduled)":
+elif snapshot_filter == t("snapshot_scheduled"):
     filtered = [r for r in filtered if r.get("snapshot_type") == "scheduled"]
 
 
@@ -66,13 +63,13 @@ elif snapshot_filter == "자동 (scheduled)":
 # 통계 카드
 # ──────────────────────────────────────────
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("총 분석 횟수", f"{len(filtered)}건")
-c2.metric("분석한 종목 수", f"{len({r['stock_code'] for r in filtered})}개")
+c1.metric(t("total_count"), f"{len(filtered)}")
+c2.metric(t("stock_count"), f"{len({r['stock_code'] for r in filtered})}")
 stances = [r.get("decision_stance") for r in filtered if r.get("decision_stance")]
 buy_count = sum(1 for s in stances if s in ("STRONG_BUY", "BUY"))
 sell_count = sum(1 for s in stances if s in ("STRONG_SELL", "SELL"))
-c3.metric("매수 판단", f"{buy_count}건")
-c4.metric("매도 판단", f"{sell_count}건")
+c3.metric(t("buy_count"), f"{buy_count}")
+c4.metric(t("sell_count"), f"{sell_count}")
 
 st.divider()
 
