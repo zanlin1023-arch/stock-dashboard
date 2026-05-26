@@ -36,15 +36,29 @@ if not all_records:
     st.stop()
 
 
-# 종목 필터
-codes = sorted({(r["stock_code"], r["stock_name"]) for r in all_records}, key=lambda x: x[1])
-options = ["(전체)"] + [f"{name} ({code})" for code, name in codes]
-sel = st.selectbox("📌 종목 필터", options)
+# 필터 — 종목 + 스냅샷 종류
+fcol1, fcol2 = st.columns([2, 1])
+with fcol1:
+    codes = sorted({(r["stock_code"], r["stock_name"]) for r in all_records}, key=lambda x: x[1])
+    options = ["(전체)"] + [f"{name} ({code})" for code, name in codes]
+    sel = st.selectbox("📌 종목 필터", options)
+
+with fcol2:
+    snapshot_filter = st.selectbox(
+        "🔄 스냅샷 종류",
+        ["전체", "수동 (manual)", "자동 (scheduled)"],
+        help="manual: 분석 페이지에서 직접 저장 / scheduled: 매일 18:00 자동 누적",
+    )
 
 filtered = all_records
 if sel != "(전체)":
     sel_code = sel.split("(")[-1].rstrip(")")
-    filtered = [r for r in all_records if r["stock_code"] == sel_code]
+    filtered = [r for r in filtered if r["stock_code"] == sel_code]
+
+if snapshot_filter == "수동 (manual)":
+    filtered = [r for r in filtered if r.get("snapshot_type") == "manual"]
+elif snapshot_filter == "자동 (scheduled)":
+    filtered = [r for r in filtered if r.get("snapshot_type") == "scheduled"]
 
 
 # ──────────────────────────────────────────
@@ -69,6 +83,7 @@ rows = []
 for r in filtered:
     rows.append({
         "분석시각": r.get("analyzed_at", "")[:19].replace("T", " "),
+        "타입": "🤖 자동" if r.get("snapshot_type") == "scheduled" else "👤 수동",
         "종목": f"{r.get('stock_name', '')} ({r.get('stock_code', '')})",
         "현재가": f"{r['price']:,.0f}" if r.get("price") else "-",
         "RSI": f"{r['rsi_14']:.1f}" if r.get("rsi_14") else "-",

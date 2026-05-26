@@ -125,6 +125,7 @@ def save_analysis(
     decision: dict,
     targets: dict,
     swings: Optional[dict] = None,
+    snapshot_type: str = "manual",  # 'manual' or 'scheduled'
 ) -> dict:
     """분석 결과를 히스토리에 저장."""
     client = get_client()
@@ -134,6 +135,7 @@ def save_analysis(
     record = {
         "stock_code": stock_code,
         "stock_name": stock_name,
+        "snapshot_type": snapshot_type,
         "price": _safe_num(technical.get("current_price")),
         "rsi_14": _safe_num(technical.get("rsi_14")),
         "macd": _safe_num(technical.get("macd")),

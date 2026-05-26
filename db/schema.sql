@@ -62,6 +62,10 @@ CREATE INDEX IF NOT EXISTS idx_history_code ON analysis_history(stock_code);
 CREATE INDEX IF NOT EXISTS idx_history_date ON analysis_history(analyzed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_history_code_date ON analysis_history(stock_code, analyzed_at DESC);
 
+-- 스냅샷 종류 ('manual' = 사용자 수동, 'scheduled' = 매일 자동)
+ALTER TABLE analysis_history ADD COLUMN IF NOT EXISTS snapshot_type TEXT DEFAULT 'manual';
+CREATE INDEX IF NOT EXISTS idx_history_snapshot_type ON analysis_history(snapshot_type, analyzed_at DESC);
+
 -- updated_at 자동 갱신 트리거 (holdings용)
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
