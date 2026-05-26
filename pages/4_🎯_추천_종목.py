@@ -23,15 +23,15 @@ minute = now.minute
 
 if hour < 9:
     default_session = "morning"
-    session_label = "🌅 장 시작 전"
+    session_label = f"🌅 {t('session_morning_label')}"
 elif hour < 15 or (hour == 15 and minute < 30):
     default_session = "intraday"
-    session_label = "☀️ 장 중"
+    session_label = f"☀️ {t('session_intraday_label')}"
 else:
     default_session = "evening"
-    session_label = "🌙 장 마감 후"
+    session_label = f"🌙 {t('session_evening_label')}"
 
-st.caption(f"🕐 현재 한국 시각: **{now.strftime('%Y-%m-%d %H:%M')}** — 모드: **{session_label}**")
+st.caption(f"🕐 {t('current_kst')}: **{now.strftime('%Y-%m-%d %H:%M')}** — {t('current_mode')}: **{session_label}**")
 
 
 # ──────────────────────────────────────────
@@ -53,34 +53,32 @@ cc1, cc2, cc3, cc4 = st.columns([2, 2, 2, 2])
 
 with cc1:
     if saved_dates:
-        # 날짜 선택 (기본: 가장 최근)
-        date_options = ["📅 최신"] + [d for d in saved_dates]
-        sel_date_label = st.selectbox("📅 조회 날짜", date_options)
-        if sel_date_label == "📅 최신":
+        date_options = [t("filter_latest")] + [d for d in saved_dates]
+        sel_date_label = st.selectbox(t("filter_date"), date_options)
+        if sel_date_label == t("filter_latest"):
             target_date = saved_dates[0]
         else:
             target_date = sel_date_label
     else:
-        st.info("저장된 추천 없음")
+        st.info(t("no_saved_recs"))
         target_date = None
 
 with cc2:
-    session_options = ["전체", "🌅 morning", "☀️ intraday", "🌙 evening"]
+    session_options = [t("snapshot_all"), "🌅 morning", "☀️ intraday", "🌙 evening"]
     default_idx = {"morning": 1, "intraday": 2, "evening": 3}.get(default_session, 3)
-    sel_session_label = st.selectbox("⏰ 세션", session_options, index=default_idx)
-    session_map = {"전체": None, "🌅 morning": "morning", "☀️ intraday": "intraday", "🌙 evening": "evening"}
+    sel_session_label = st.selectbox(t("filter_session"), session_options, index=default_idx)
+    session_map = {t("snapshot_all"): None, "🌅 morning": "morning", "☀️ intraday": "intraday", "🌙 evening": "evening"}
     sel_session = session_map[sel_session_label]
 
 with cc3:
     st.write("")
     st.write("")
-    run_now = st.button("🚀 지금 분석 실행", type="primary", use_container_width=True,
-                        help="실시간으로 새 추천을 실행 + DB 저장 (30초~6분)")
+    run_now = st.button(t("btn_run_now"), type="primary", use_container_width=True)
 
 with cc4:
     st.write("")
     st.write("")
-    if st.button("🔍 7일 추이 분석", use_container_width=True):
+    if st.button(t("btn_7d_trend"), use_container_width=True):
         st.session_state["show_trend"] = not st.session_state.get("show_trend", False)
 
 

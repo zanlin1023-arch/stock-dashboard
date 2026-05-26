@@ -1,0 +1,7 @@
+# Streamlit 자동 페이지 nav 숨기기 (i18n 안 되는 파일명 기반)
+# 우리 sidebar_nav()의 i18n 메뉴만 사용
+[client]
+showSidebarNavigation = false
+
+[theme]
+primaryColor = "#FF4B4B"
