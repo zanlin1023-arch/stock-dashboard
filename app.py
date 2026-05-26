@@ -11,7 +11,12 @@ import streamlit as st
 # 환경 설정 (Streamlit secrets → os.environ 주입)
 # ───────────────────────────────────────────────────────
 def _setup_environment():
-    secret_keys = ["OPENDART_API_KEY"]
+    secret_keys = [
+        "OPENDART_API_KEY",
+        "SUPABASE_URL",
+        "SUPABASE_KEY",
+        "SUPABASE_PUBLISHABLE_KEY",
+    ]
     for key in secret_keys:
         if key in st.secrets:
             os.environ[key] = str(st.secrets[key])
@@ -73,6 +78,15 @@ check_password()
 st.title("📊 분석 대시보드")
 st.markdown("KOSPI/KOSDAQ — 일목균형표 + 백테스팅 + 펀더멘털 종합 분석")
 
+# DB 연동 모듈 로드
+try:
+    from analyzer import db
+    _db_available = db.is_db_available()
+except Exception as e:
+    _db_available = False
+    db = None
+    _db_err = str(e)
+
 # 사이드바: 종목 입력
 with st.sidebar:
     st.header("🔍 종목 검색")
@@ -82,19 +96,15 @@ with st.sidebar:
         placeholder="예: 삼성전자 또는 005930",
     )
     days = st.slider("분석 기간 (일)", 90, 365, 180, step=30)
+    save_to_db = st.checkbox("📥 결과를 DB에 저장", value=_db_available, disabled=not _db_available)
     analyze_btn = st.button("🚀 분석 시작", type="primary", use_container_width=True)
 
     st.divider()
-    st.markdown("### 📖 사용법")
-    st.markdown(
-        """
-        - 종목명/코드 입력 후 **분석 시작**
-        - 결과: 일목균형표 차트 + 시그널 + 백테스팅 가격대
-        - 데이터: pykrx, FinanceDataReader, OpenDART
-        """
-    )
-    st.caption(f"버전: 0.1.0 · MVP")
-
+    if _db_available:
+        st.success("✅ DB 연결됨")
+    else:
+        st.warning("⚠️ DB 미연결 (분석만 가능)")
+    st.caption("버전: 0.2.0")
 
 # ───────────────────────────────────────────────────────
 # 분석 실행
