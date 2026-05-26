@@ -104,6 +104,16 @@ def resolve_ticker(query: str) -> tuple[str, str]:
     q = query.strip()
     if is_stock_code(q):
         code = q
+        # FDR로 종목명 조회 (pykrx 의존성 없음)
+        try:
+            listing = fdr.StockListing("KRX")
+            code_col = "Code" if "Code" in listing.columns else "Symbol"
+            match = listing[listing[code_col].astype(str).str.zfill(6) == code]
+            if len(match) > 0:
+                return code, str(match.iloc[0]["Name"])
+        except Exception:
+            pass
+        # pykrx 폴백 (있을 때만)
         try:
             from pykrx import stock
             name = stock.get_market_ticker_name(code)

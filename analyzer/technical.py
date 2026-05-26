@@ -6,22 +6,43 @@ from typing import Any
 
 import pandas as pd
 
-from _utils import date_range, fmt_num, fmt_pct
+from _utils import date_range, date_range_iso, fmt_num, fmt_pct
 
 warnings.filterwarnings("ignore")
 
 
 def fetch_ohlcv(code: str, days: int = 180) -> pd.DataFrame:
-    from pykrx import stock
+    """OHLCV 조회. FDR 우선, pykrx 폴백."""
+    # FDR 우선 (가벼움, setuptools 의존성 없음)
+    try:
+        import FinanceDataReader as fdr
+        start_iso, end_iso = date_range_iso(days)
+        df = fdr.DataReader(code, start_iso, end_iso)
+        if df is not None and not df.empty:
+            df = df.rename(
+                columns={
+                    "Open": "open", "High": "high", "Low": "low",
+                    "Close": "close", "Volume": "volume",
+                }
+            )
+            keep = [c for c in ["open", "high", "low", "close", "volume"] if c in df.columns]
+            return df[keep]
+    except Exception:
+        pass
 
-    start, end = date_range(days)
-    df = stock.get_market_ohlcv(start, end, code)
-    if df is None or df.empty:
-        raise ValueError(f"OHLCV 데이터 없음: {code}")
-    df = df.rename(
-        columns={"시가": "open", "고가": "high", "저가": "low", "종가": "close", "거래량": "volume"}
-    )
-    return df
+    # pykrx 폴백 (설치돼있을 때만)
+    try:
+        from pykrx import stock
+        start, end = date_range(days)
+        df = stock.get_market_ohlcv(start, end, code)
+        if df is not None and not df.empty:
+            return df.rename(
+                columns={"시가": "open", "고가": "high", "저가": "low", "종가": "close", "거래량": "volume"}
+            )
+    except Exception:
+        pass
+
+    raise ValueError(f"OHLCV 데이터 없음: {code}")
 
 
 def add_indicators(df: pd.DataFrame) -> pd.DataFrame:

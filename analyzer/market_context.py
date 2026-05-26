@@ -138,8 +138,11 @@ def get_index_status() -> dict[str, Any]:
     if out:
         return out
 
-    # pykrx fallback
-    from pykrx import stock
+    # pykrx fallback (있을 때만)
+    try:
+        from pykrx import stock
+    except Exception:
+        return out
     end = _business_day()
     start = start_dt.strftime("%Y%m%d")
     for name, code in [("KOSPI", "1001"), ("KOSDAQ", "2001")]:
@@ -191,7 +194,10 @@ def get_usd_krw() -> dict | None:
 
 def get_top_movers(market: str = "KOSPI", n: int = 10) -> dict:
     """오늘 상승률/하락률 상위 N개."""
-    from pykrx import stock
+    try:
+        from pykrx import stock
+    except Exception:
+        return {}
 
     end = _business_day()
     start = _business_day(days_back=2)
@@ -575,7 +581,10 @@ def get_sector_for(code: str) -> str | None:
 
 def compare_to_sector(code: str) -> dict | None:
     """종목 등락률 vs 섹터 평균."""
-    from pykrx import stock
+    try:
+        from pykrx import stock
+    except Exception:
+        return None
 
     sector = get_sector_for(code)
     if not sector:

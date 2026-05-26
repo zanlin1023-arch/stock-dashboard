@@ -1,11 +1,8 @@
-setuptools>=68
-wheel
 streamlit
 pandas
 numpy
 matplotlib
 mplfinance
-pykrx>=1.0.50
 finance-datareader
 opendartreader
 python-dotenv

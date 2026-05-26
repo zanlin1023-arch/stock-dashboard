@@ -216,8 +216,11 @@ def fetch_naver_ratios(code: str) -> dict[str, Any]:
 
 
 def fetch_market_ratios(code: str) -> dict[str, Any]:
-    """pykrx로 PER/PBR/배당수익률/시총 조회 (가장 최근 영업일)."""
-    from pykrx import stock
+    """pykrx로 PER/PBR/배당수익률/시총 조회 (가장 최근 영업일). 없으면 빈 dict."""
+    try:
+        from pykrx import stock
+    except Exception:
+        return {}
 
     # 종목별 시계열 조회 (최근 30일 중 가장 최근 영업일 자동 선택)
     end = datetime.now().strftime("%Y%m%d")
