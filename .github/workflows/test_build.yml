@@ -1,0 +1,90 @@
+name: Test Build (Streamlit Cloud 환경 재현)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'requirements.txt'
+      - '.github/workflows/test_build.yml'
+  workflow_dispatch:
+
+jobs:
+  test-install:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install system packages (matches packages.txt)
+        run: |
+          sudo apt-get update
+          if [ -f packages.txt ]; then
+            sudo apt-get install -y $(cat packages.txt | grep -v '^#')
+          fi
+
+      - name: 📋 Show requirements.txt
+        run: cat requirements.txt
+
+      - name: 🔧 Install each package separately (find the failing one)
+        run: |
+          python -m pip install --upgrade pip
+          while IFS= read -r pkg; do
+            [ -z "$pkg" ] && continue
+            [[ "$pkg" =~ ^#.* ]] && continue
+            echo "::group::📦 Installing: $pkg"
+            if pip install "$pkg"; then
+              echo "  ✅ OK"
+            else
+              echo "  ❌ FAILED: $pkg"
+              exit 1
+            fi
+            echo "::endgroup::"
+          done < requirements.txt
+
+      - name: ✅ Test app.py imports (no actual run)
+        run: |
+          python -c "
+          import sys
+          sys.path.insert(0, '.')
+          sys.path.insert(0, 'analyzer')
+          # Skip Streamlit secrets (not available in CI)
+          import os
+          os.environ['SUPABASE_URL'] = 'dummy'
+          os.environ['SUPABASE_KEY'] = 'dummy'
+          os.environ['OPENDART_API_KEY'] = 'dummy'
+          try:
+              import streamlit
+              print(f'streamlit {streamlit.__version__}')
+              import pandas as pd
+              print(f'pandas {pd.__version__}')
+              import matplotlib
+              print(f'matplotlib {matplotlib.__version__}')
+              import mplfinance as mpf
+              print(f'mplfinance {mpf.__version__}')
+              import FinanceDataReader as fdr
+              print(f'FinanceDataReader {fdr.__version__}')
+              import supabase
+              print(f'supabase {supabase.__version__}')
+              from bs4 import BeautifulSoup
+              print('bs4 OK')
+              print('✅ All imports OK')
+          except Exception as e:
+              print(f'❌ Import failed: {e}')
+              import traceback
+              traceback.print_exc()
+              sys.exit(1)
+          "
+
+      - name: 📊 Summary
+        if: always()
+        run: |
+          echo "## 🔍 빌드 테스트 결과" >> $GITHUB_STEP_SUMMARY
+          echo "- 상태: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 환경: Ubuntu 22.04 + Python 3.11 (Streamlit Cloud 동일)" >> $GITHUB_STEP_SUMMARY
