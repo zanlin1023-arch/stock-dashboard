@@ -94,25 +94,59 @@ def is_stock_code(s: str) -> bool:
     return bool(re.fullmatch(r"\d{6}", s.strip()))
 
 
+_LISTING_CACHE = None
+
+
+def _load_listing():
+    """KRX 종목 리스트. 캐시 CSV 우선, 실패 시 fdr 호출."""
+    global _LISTING_CACHE
+    if _LISTING_CACHE is not None:
+        return _LISTING_CACHE
+
+    # 1) repo 내 캐시 CSV (Streamlit Cloud에서도 동작)
+    cache_path = Path(__file__).parent / "data" / "krx_listing.csv"
+    if cache_path.exists():
+        try:
+            import pandas as pd
+            df = pd.read_csv(cache_path, dtype={"Code": str})
+            df["Code"] = df["Code"].astype(str).str.zfill(6)
+            _LISTING_CACHE = df
+            return df
+        except Exception:
+            pass
+
+    # 2) FDR 실시간 호출 (로컬 PC에서만 가능, KRX 접근 가능 환경)
+    try:
+        import FinanceDataReader as fdr
+        df = fdr.StockListing("KRX")
+        if "Code" in df.columns:
+            df["Code"] = df["Code"].astype(str).str.zfill(6)
+        _LISTING_CACHE = df
+        return df
+    except Exception:
+        pass
+
+    return None
+
+
 def resolve_ticker(query: str) -> tuple[str, str]:
     """종목코드 또는 종목명 → (code, name) 반환.
 
     KOSPI/KOSDAQ에서 검색. 동명이인 발생 시 첫 매칭 반환.
     """
-    import FinanceDataReader as fdr
-
     q = query.strip()
+    listing = _load_listing()
+
     if is_stock_code(q):
         code = q
-        # FDR로 종목명 조회 (pykrx 의존성 없음)
-        try:
-            listing = fdr.StockListing("KRX")
+        if listing is not None:
             code_col = "Code" if "Code" in listing.columns else "Symbol"
-            match = listing[listing[code_col].astype(str).str.zfill(6) == code]
-            if len(match) > 0:
-                return code, str(match.iloc[0]["Name"])
-        except Exception:
-            pass
+            try:
+                match = listing[listing[code_col].astype(str).str.zfill(6) == code]
+                if len(match) > 0:
+                    return code, str(match.iloc[0]["Name"])
+            except Exception:
+                pass
         # pykrx 폴백 (있을 때만)
         try:
             from pykrx import stock
@@ -124,14 +158,16 @@ def resolve_ticker(query: str) -> tuple[str, str]:
         return code, code
 
     # 종목명으로 검색
-    listing = fdr.StockListing("KRX")
+    if listing is None:
+        raise ValueError(f"종목 리스트 로드 실패 (캐시/FDR 모두 실패): {query}")
+
     code_col = "Code" if "Code" in listing.columns else "Symbol"
     name_col = "Name"
     exact = listing[listing[name_col] == q]
     if len(exact) > 0:
         row = exact.iloc[0]
         return str(row[code_col]).zfill(6), str(row[name_col])
-    partial = listing[listing[name_col].str.contains(q, na=False)]
+    partial = listing[listing[name_col].astype(str).str.contains(q, na=False)]
     if len(partial) > 0:
         row = partial.iloc[0]
         return str(row[code_col]).zfill(6), str(row[name_col])
