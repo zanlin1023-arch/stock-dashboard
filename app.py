@@ -1,33 +1,9 @@
 """분석 대시보드 - KOSPI/KOSDAQ 일목균형표 + 종합 분석."""
 from __future__ import annotations
 
-import os
-import sys
-from pathlib import Path
-
 import streamlit as st
 
-# ───────────────────────────────────────────────────────
-# 환경 설정 (Streamlit secrets → os.environ 주입)
-# ───────────────────────────────────────────────────────
-def _setup_environment():
-    secret_keys = [
-        "OPENDART_API_KEY",
-        "SUPABASE_URL",
-        "SUPABASE_KEY",
-        "SUPABASE_PUBLISHABLE_KEY",
-    ]
-    for key in secret_keys:
-        if key in st.secrets:
-            os.environ[key] = str(st.secrets[key])
-
-
-_setup_environment()
-
-# analyzer 패키지를 sys.path에 추가
-ROOT = Path(__file__).resolve().parent
-sys.path.insert(0, str(ROOT / "analyzer"))
-
+from common import init_page, get_db, sidebar_nav
 
 # ───────────────────────────────────────────────────────
 # 페이지 설정
@@ -39,37 +15,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
-# ───────────────────────────────────────────────────────
-# 비밀번호 인증
-# ───────────────────────────────────────────────────────
-def check_password() -> bool:
-    """비밀번호 인증. 통과 시 True 반환, 실패 시 페이지 정지."""
-    if st.session_state.get("authenticated"):
-        return True
-
-    st.title("🔒 분석 대시보드")
-    st.markdown("비밀번호를 입력하세요.")
-
-    with st.form("login_form"):
-        password = st.text_input("비밀번호", type="password")
-        submitted = st.form_submit_button("로그인")
-
-        if submitted:
-            correct_pw = st.secrets.get("app_password", "")
-            if not correct_pw:
-                st.error("⚠️ 앱 비밀번호가 설정되지 않았습니다. Streamlit Secrets에 `app_password` 추가 필요.")
-                st.stop()
-            if password == correct_pw:
-                st.session_state["authenticated"] = True
-                st.rerun()
-            else:
-                st.error("❌ 비밀번호가 틀렸습니다.")
-
-    st.stop()
-
-
-check_password()
+init_page("홈")
+sidebar_nav()
 
 
 # ───────────────────────────────────────────────────────
@@ -78,14 +25,9 @@ check_password()
 st.title("📊 분석 대시보드")
 st.markdown("KOSPI/KOSDAQ — 일목균형표 + 백테스팅 + 펀더멘털 종합 분석")
 
-# DB 연동 모듈 로드
-try:
-    from analyzer import db
-    _db_available = db.is_db_available()
-except Exception as e:
-    _db_available = False
-    db = None
-    _db_err = str(e)
+# DB 연동
+db = get_db()
+_db_available = db is not None
 
 # 사이드바: 종목 입력
 with st.sidebar:
@@ -244,6 +186,33 @@ if analyze_btn and query:
         st.image(str(chart_path), use_container_width=True)
     else:
         st.warning("차트 생성 실패")
+
+    # DB 저장
+    if save_to_db and _db_available and db is not None:
+        try:
+            tech_for_db = dict(result)
+            tech_for_db.update({
+                "tenkan": float(df["tenkan"].iloc[-1]) if df["tenkan"].notna().any() else None,
+                "kijun": float(df["kijun"].iloc[-1]) if df["kijun"].notna().any() else None,
+                "senkou_a": float(df["senkou_a"].iloc[-1]) if df["senkou_a"].notna().any() else None,
+                "senkou_b": float(df["senkou_b"].iloc[-1]) if df["senkou_b"].notna().any() else None,
+            })
+            saved = db.save_analysis(code, name, tech_for_db, decision, targets, swings)
+            if saved:
+                st.success(f"📥 DB 저장 완료 (id: {saved.get('id')})")
+        except Exception as e:
+            st.warning(f"⚠️ DB 저장 실패: {e}")
+
+    # 관심종목 추가 버튼
+    if _db_available and db is not None:
+        wcol1, wcol2 = st.columns([1, 5])
+        with wcol1:
+            if st.button("⭐ 관심 종목 추가", use_container_width=True):
+                try:
+                    db.add_watch(code, name)
+                    st.success(f"✅ {name} 관심 종목에 추가됨")
+                except Exception as e:
+                    st.error(f"❌ 추가 실패: {e}")
 
     # 시그널 목록
     st.subheader("🚨 시그널")
