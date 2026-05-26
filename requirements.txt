@@ -1,12 +1,12 @@
-setuptools
-wheel
 streamlit
 pandas
 numpy
 matplotlib
 mplfinance
 finance-datareader
+opendartreader
 python-dotenv
 requests
 beautifulsoup4
+lxml
 supabase
