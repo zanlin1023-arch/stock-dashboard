@@ -76,7 +76,7 @@ def init_page(page_title: str = "분석 대시보드"):
     """페이지 진입 boilerplate. (환경설정 + 인증 + path + 현재 페이지명 저장)"""
     setup_environment()
     setup_analyzer_path()
-    require_password()
+    # require_password()  # 비밀번호 인증 비활성화 (사용자 요청)
     # sidebar_nav에서 현재 페이지에 맞는 하위 메뉴 표시용
     st.session_state["_current_page"] = page_title
 
