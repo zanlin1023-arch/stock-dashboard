@@ -333,12 +333,11 @@ def render_session_progress(db, now: datetime):
 
     session_schedule = [
         ("🌅", "morning", 8, 0, t("rec_session_morning_desc")),
-        ("☀️", "intraday", 14, 0, t("rec_session_intraday_desc")),
         ("🌙", "evening", 21, 0, t("rec_session_evening_desc")),
     ]
 
     st.markdown(f"##### {t('rec_session_progress')}")
-    sess_cols = st.columns(3)
+    sess_cols = st.columns(2)
     for col, (emoji, sess_id, sh, sm, desc) in zip(sess_cols, session_schedule):
         sess_time = now.replace(hour=sh, minute=sm, second=0, microsecond=0)
 

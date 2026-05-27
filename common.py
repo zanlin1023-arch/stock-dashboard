@@ -185,7 +185,6 @@ def sidebar_nav():
         st.markdown(f"**{t('nav_recommend')}**")
         st.markdown('<div class="subnav-wrap">', unsafe_allow_html=True)
         st.page_link("pages/4a_🌅_morning_추천.py", label=t("nav_rec_morning"))
-        st.page_link("pages/4b_☀️_intraday_추천.py", label=t("nav_rec_intraday"))
         st.page_link("pages/4c_🌙_evening_추천.py", label=t("nav_rec_evening"))
         st.markdown('</div>', unsafe_allow_html=True)
 

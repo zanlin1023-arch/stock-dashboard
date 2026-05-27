@@ -4,17 +4,15 @@ on:
   schedule:
     # 🌅 평일 08:00 KST (전날 UTC 23:00) — 장 시작 전
     - cron: '0 23 * * 0-4'
-    # ☀️ 평일 14:00 KST (UTC 05:00) — 장 중
-    - cron: '0 5 * * 1-5'
     # 🌙 평일 21:00 KST (UTC 12:00) — NXT 마감 후
     - cron: '0 12 * * 1-5'
   workflow_dispatch:
     inputs:
       session:
-        description: 'Session (morning/intraday/evening)'
+        description: 'Session (morning/evening)'
         type: choice
         default: evening
-        options: [morning, intraday, evening]
+        options: [morning, evening]
       top_n:
         description: 'Top N per tier'
         default: '5'
@@ -54,7 +52,6 @@ jobs:
           if [ -z "$SESSION" ]; then
             case "${{ github.event.schedule }}" in
               "0 23 * * 0-4") SESSION="morning" ;;
-              "0 5 * * 1-5")  SESSION="intraday" ;;
               "0 12 * * 1-5") SESSION="evening" ;;
               *) SESSION="evening" ;;
             esac

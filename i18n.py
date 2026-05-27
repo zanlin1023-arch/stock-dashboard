@@ -372,8 +372,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "rec_time_hours_min_later": {"ko": "⏳ {h}시간 {m}분 후", "zh-TW": "⏳ {h}小時{m}分後"},
     "rec_time_min_later": {"ko": "⏳ {m}분 후", "zh-TW": "⏳ {m}分後"},
     "rec_intro_no_recs": {
-        "ko": "💡 아직 저장된 추천이 없습니다. 매일 평일 다음 시각에 자동 분석됩니다:\n\n- 🌅 **08:00 KST** — 장 시작 전 (morning)\n- ☀️ **14:00 KST** — 장 중 (intraday)\n- 🌙 **21:00 KST** — NXT 마감 후 (evening)",
-        "zh-TW": "💡 尚無已儲存的推薦。每個工作日將於以下時間自動分析:\n\n- 🌅 **08:00 KST** — 開盤前 (morning)\n- ☀️ **14:00 KST** — 盤中 (intraday)\n- 🌙 **21:00 KST** — NXT 收盤後 (evening)",
+        "ko": "💡 아직 저장된 추천이 없습니다. 매일 평일 다음 시각에 자동 분석됩니다:\n\n- 🌅 **08:00 KST** — 장 시작 전 (morning)\n- 🌙 **21:00 KST** — NXT 마감 후 (evening)",
+        "zh-TW": "💡 尚無已儲存的推薦。每個工作日將於以下時間自動分析:\n\n- 🌅 **08:00 KST** — 開盤前 (morning)\n- 🌙 **21:00 KST** — NXT 收盤後 (evening)",
     },
     "rec_analyzed_at_kst": {"ko": "🕐 분석 시각 (KST)", "zh-TW": "🕐 分析時間 (KST)"},
     "rec_7d_trend_title": {"ko": "📊 7일 추천 종목 추이", "zh-TW": "📊 7日推薦個股趨勢"},

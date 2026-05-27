@@ -78,7 +78,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--top-n", type=int, default=5)
-    parser.add_argument("--session", default="evening", choices=["morning", "intraday", "evening"])
+    parser.add_argument("--session", default="evening", choices=["morning", "evening"])
     parser.add_argument("--date", default=None, help="YYYY-MM-DD (백필용, 미지정 시 오늘)")
     args = parser.parse_args()
 
