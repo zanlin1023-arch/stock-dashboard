@@ -219,10 +219,43 @@ def render_hot_themes(recs: list[dict]):
 
 
 # ──────────────────────────────────────────
-# 섹터 해석 (DART 우선 → peer fallback)
+# 섹터 해석 (DART → 네이버 → peer fallback)
 # ──────────────────────────────────────────
+@st.cache_data(ttl=86400, show_spinner=False)
+def _scrape_naver_sector(code: str) -> str:
+    """네이버 모바일 API로 종목 업종 조회 (24h 캐시)."""
+    if not code:
+        return ""
+    try:
+        import requests
+        r = requests.get(
+            f"https://m.stock.naver.com/api/stock/{code}/integration",
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=5,
+        )
+        if r.status_code != 200:
+            return ""
+        data = r.json() or {}
+        # industry / sector 후보 키
+        for key in ("industry", "industryName", "sectorName", "wicsKor"):
+            v = data.get(key)
+            if v and isinstance(v, str) and v.strip():
+                return v.strip()
+        # stockEndType > industryGroup
+        for grp_key in ("stockBasicInfo", "industryDetail"):
+            grp = data.get(grp_key) or {}
+            if isinstance(grp, dict):
+                for k in ("industry", "industryName", "groupName", "wicsKor"):
+                    v = grp.get(k)
+                    if v and isinstance(v, str) and v.strip():
+                        return v.strip()
+    except Exception:
+        pass
+    return ""
+
+
 def _resolve_sector(code: str) -> str:
-    """종목 sector 결정: DART 업종명 우선, 없으면 peer_data fallback."""
+    """종목 sector 결정: DART → 네이버 → peer fallback 3단계."""
     try:
         from analyzer.stock_meta_dart import get_sector as _dart_sector
         s = _dart_sector(code)
@@ -230,10 +263,33 @@ def _resolve_sector(code: str) -> str:
             return s
     except Exception:
         pass
+    s = _scrape_naver_sector(code)
+    if s:
+        return s
     try:
         return _peer_data(code, max_peers=1).get("sector_name") or ""
     except Exception:
         return ""
+
+
+def diagnose_sector(code: str) -> dict:
+    """sector 조회 진단 (사용자 디버그용)."""
+    diag = {"code": code}
+    # DART
+    try:
+        from analyzer.stock_meta_dart import _get_api_key, _load_corp_code_map, get_company_info
+        diag["dart_key_set"] = bool(_get_api_key())
+        diag["dart_key_len"] = len(_get_api_key() or "")
+        cmap = _load_corp_code_map()
+        diag["dart_corp_map_size"] = len(cmap)
+        diag["dart_code_in_map"] = code.zfill(6) in cmap
+        info = get_company_info(code)
+        diag["dart_company_info"] = info
+    except Exception as e:
+        diag["dart_error"] = str(e)
+    # 네이버
+    diag["naver_sector"] = _scrape_naver_sector(code)
+    return diag
 
 
 def prefetch_meta(codes: list[str], max_workers: int = 10):
@@ -569,6 +625,15 @@ def render_session_recommendations(db, session: str):
     # 강세 테마 박스 (테이블 위)
     st.divider()
     render_hot_themes(recs)
+
+    # 디버그: 테마 조회 진단 (첫 종목 기준)
+    with st.expander("🔧 테마 조회 진단 (DART/네이버 상태)", expanded=False):
+        if recs:
+            sample_code = recs[0].get("stock_code", "")
+            sample_name = recs[0].get("stock_name", "")
+            st.caption(f"샘플: {sample_name} ({sample_code})")
+            diag = diagnose_sector(sample_code)
+            st.json(diag)
 
     # 컴팩트 정렬 테이블 + 종목 상세 펼침
     st.markdown(f"## {emoji} {label}")
