@@ -154,31 +154,69 @@ def compute_hot_themes(recs: list[dict], top_n: int = 5) -> list[dict]:
 
 
 def render_hot_themes(recs: list[dict]):
-    """상단 강세 테마 박스."""
+    """상단 강세 테마 박스 — sector 데이터 부족 시 등락률 상위 종목 fallback."""
     themes = compute_hot_themes(recs, top_n=5)
-    if not themes:
-        st.caption(t("rec_hot_themes_empty"))
+
+    if themes:
+        # 정상: 테마 chip 렌더
+        chip_html = []
+        for th in themes:
+            avg = th["avg_change"]
+            color = "#E74C3C" if avg > 0 else ("#1F77D4" if avg < 0 else "#7F8C8D")
+            stocks_preview = " · ".join(th["stocks"][:3])
+            chip_html.append(
+                f"<span style='display:inline-block;margin:3px 4px;padding:6px 12px;"
+                f"background:{color}15;border:1px solid {color}40;border-radius:14px;"
+                f"font-size:0.82rem;color:#333;'>"
+                f"<strong style='color:{color};'>{th['theme']}</strong> "
+                f"<span style='color:#777;font-size:0.75rem;'>{th['count']}{t('rec_hot_themes_stocks')} · "
+                f"{t('rec_hot_themes_avg')} <strong style='color:{color};'>{avg:+.2f}%</strong></span>"
+                f"<div style='font-size:0.7rem;color:#999;margin-top:2px;'>{stocks_preview}</div>"
+                f"</span>"
+            )
+        st.markdown(
+            f"<div style='padding:12px 14px;background:#FFF9E6;border-left:4px solid #F1C40F;"
+            f"border-radius:8px;margin:8px 0;'>"
+            f"<div style='font-weight:700;color:#7A5C00;margin-bottom:6px;'>"
+            f"{t('rec_hot_themes_title')}</div>"
+            f"<div>{''.join(chip_html)}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
         return
+
+    # Fallback: sector 데이터 부족 시 등락률 상위 종목 chip
+    movers = []
+    for r in recs:
+        try:
+            chg = float(r.get("change_pct") or 0)
+        except (TypeError, ValueError):
+            chg = 0
+        if chg > 0:
+            movers.append((r.get("stock_name", "?"), r.get("stock_code", ""), chg))
+    movers.sort(key=lambda x: -x[2])
+    movers = movers[:6]
+    if not movers:
+        return  # 빈 박스 숨김 (메시지도 노출 안 함)
+
     chip_html = []
-    for th in themes:
-        avg = th["avg_change"]
-        color = "#E74C3C" if avg > 0 else ("#1F77D4" if avg < 0 else "#7F8C8D")
-        stocks_preview = " · ".join(th["stocks"][:3])
+    for name, code, chg in movers:
+        color = "#E74C3C"
         chip_html.append(
             f"<span style='display:inline-block;margin:3px 4px;padding:6px 12px;"
             f"background:{color}15;border:1px solid {color}40;border-radius:14px;"
             f"font-size:0.82rem;color:#333;'>"
-            f"<strong style='color:{color};'>{th['theme']}</strong> "
-            f"<span style='color:#777;font-size:0.75rem;'>{th['count']}{t('rec_hot_themes_stocks')} · "
-            f"{t('rec_hot_themes_avg')} <strong style='color:{color};'>{avg:+.2f}%</strong></span>"
-            f"<div style='font-size:0.7rem;color:#999;margin-top:2px;'>{stocks_preview}</div>"
+            f"<strong>{name}</strong> "
+            f"<span style='color:{color};font-weight:600;'>{chg:+.2f}%</span>"
+            f"<span style='color:#999;font-size:0.7rem;margin-left:4px;'>{code}</span>"
             f"</span>"
         )
     st.markdown(
         f"<div style='padding:12px 14px;background:#FFF9E6;border-left:4px solid #F1C40F;"
         f"border-radius:8px;margin:8px 0;'>"
         f"<div style='font-weight:700;color:#7A5C00;margin-bottom:6px;'>"
-        f"{t('rec_hot_themes_title')}</div>"
+        f"🔥 오늘 강세 종목 <span style='font-weight:400;color:#999;font-size:0.75rem;'>"
+        f"(테마 매핑 부족 → 등락률 상위 표시)</span></div>"
         f"<div>{''.join(chip_html)}</div>"
         f"</div>",
         unsafe_allow_html=True,
