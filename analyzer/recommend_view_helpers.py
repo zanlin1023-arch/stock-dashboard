@@ -240,8 +240,8 @@ def _scrape_naver_sector(code: str) -> str:
         )
         if r.status_code != 200:
             return ""
-        r.encoding = "euc-kr"
-        soup = BeautifulSoup(r.text, "html.parser")
+        # raw bytes를 EUC-KR로 BeautifulSoup에 직접 전달 (r.text 사용 시 깨짐)
+        soup = BeautifulSoup(r.content, "html.parser", from_encoding="euc-kr")
         a = soup.select_one('a[href*="sise_group_detail.naver"]')
         if a:
             sector = a.get_text(strip=True)
