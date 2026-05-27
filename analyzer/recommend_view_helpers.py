@@ -236,6 +236,26 @@ def _resolve_sector(code: str) -> str:
         return ""
 
 
+def prefetch_meta(codes: list[str], max_workers: int = 10):
+    """DART/peer 메타를 병렬로 미리 캐시 워밍업.
+
+    페이지 첫 로딩 시 종목별 직렬 호출 (~15초) → 병렬 (~2-3초)로 단축.
+    """
+    if not codes:
+        return
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _warm(c: str):
+        try:
+            from analyzer.stock_meta_dart import get_company_info
+            get_company_info(c)
+        except Exception:
+            pass
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        list(ex.map(_warm, codes))
+
+
 # ──────────────────────────────────────────
 # 동종업종 비교 캐시
 # ──────────────────────────────────────────
@@ -526,6 +546,10 @@ def render_session_recommendations(db, session: str):
     if not recs:
         st.warning(f"📅 {target_date} ({session}) — {t('rec_no_saved_for_date')}")
         return
+
+    # DART 메타 병렬 prefetch (첫 로딩 ~15초 → 2-3초)
+    with st.spinner("📡 회사 정보 조회 중..."):
+        prefetch_meta([r.get("stock_code", "") for r in recs if r.get("stock_code")])
 
     # 요약 카드
     total = len(recs)
