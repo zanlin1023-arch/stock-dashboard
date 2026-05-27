@@ -225,7 +225,7 @@ def save_recommendations(results: dict, session: str = "evening") -> int:
                 "rank_in_tier": rank,
                 "stock_code": stock.get("code"),
                 "stock_name": stock.get("name"),
-                "score": _safe_num(stock.get("score")),
+                "score": int(round(float(stock.get("score") or 0))) or None,
                 "price": int(float(stock.get("price") or 0)) or None,
                 "change_pct": _safe_num(stock.get("change_pct")),
                 "market_cap_eok": int(stock.get("market_cap_eok") or 0) or None,
