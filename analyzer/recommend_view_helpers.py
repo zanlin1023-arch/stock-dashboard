@@ -223,39 +223,45 @@ def render_hot_themes(recs: list[dict]):
 # ──────────────────────────────────────────
 @st.cache_data(ttl=86400, show_spinner=False)
 def _scrape_naver_sector(code: str) -> str:
-    """네이버 모바일 API로 종목 업종 조회 (24h 캐시)."""
+    """네이버 PC 종목 페이지에서 업종 조회 (24h 캐시).
+
+    예: https://finance.naver.com/item/main.naver?code=005930
+    → <a href="...sise_group_detail.naver...">반도체와반도체장비</a>
+    """
     if not code:
         return ""
     try:
         import requests
+        from bs4 import BeautifulSoup
         r = requests.get(
-            f"https://m.stock.naver.com/api/stock/{code}/integration",
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=5,
+            f"https://finance.naver.com/item/main.naver?code={code}",
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+            timeout=6,
         )
         if r.status_code != 200:
             return ""
-        data = r.json() or {}
-        # industry / sector 후보 키
-        for key in ("industry", "industryName", "sectorName", "wicsKor"):
-            v = data.get(key)
-            if v and isinstance(v, str) and v.strip():
-                return v.strip()
-        # stockEndType > industryGroup
-        for grp_key in ("stockBasicInfo", "industryDetail"):
-            grp = data.get(grp_key) or {}
-            if isinstance(grp, dict):
-                for k in ("industry", "industryName", "groupName", "wicsKor"):
-                    v = grp.get(k)
-                    if v and isinstance(v, str) and v.strip():
-                        return v.strip()
+        r.encoding = "euc-kr"
+        soup = BeautifulSoup(r.text, "html.parser")
+        a = soup.select_one('a[href*="sise_group_detail.naver"]')
+        if a:
+            sector = a.get_text(strip=True)
+            if sector:
+                return sector
     except Exception:
         pass
     return ""
 
 
 def _resolve_sector(code: str) -> str:
-    """종목 sector 결정: DART → 네이버 → peer fallback 3단계."""
+    """종목 sector 결정 — 네이버 PC가 가장 안정적이라 1차로.
+
+    DART는 induty(업종명)가 비어있는 경우 많음 (induty_code만 있음).
+    """
+    # 1차: 네이버 PC 종목 페이지 (가장 안정, 한글 업종명 확실)
+    s = _scrape_naver_sector(code)
+    if s:
+        return s
+    # 2차: DART
     try:
         from analyzer.stock_meta_dart import get_sector as _dart_sector
         s = _dart_sector(code)
@@ -263,9 +269,7 @@ def _resolve_sector(code: str) -> str:
             return s
     except Exception:
         pass
-    s = _scrape_naver_sector(code)
-    if s:
-        return s
+    # 3차: peer_data
     try:
         return _peer_data(code, max_peers=1).get("sector_name") or ""
     except Exception:
