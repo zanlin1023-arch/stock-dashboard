@@ -16,7 +16,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-init_page("대시보드")
+init_page(t("nav_dashboard"))
 sidebar_nav()
 
 # 거시경제 헤더 (모든 페이지 공통)
@@ -42,7 +42,7 @@ holdings = db.list_holdings()
 if not holdings:
     st.info(
         f"{t('dashboard_no_holdings')}\n\n"
-        f"👉 [💼 보유 종목 페이지](/💼_보유_종목)에서 종목을 추가하면 여기서 종합 분석이 표시됩니다."
+        f"{t('home_link_holdings_hint')}"
     )
     st.stop()
 
@@ -81,23 +81,23 @@ def decide_holding_action(
 
     # ── 1) 일목+RSI 기반 기본 액션 ──
     if p <= -10 and weak_trend:
-        base = ("🔴 손절 검토 (손실 확대 + 추세 약화)", "#E74C3C")
+        base = (t("holder_action_stoploss"), "#E74C3C")
     elif p >= 50 and (r >= 75 or cloud_pos == "below"):
-        base = ("💰 전량 익절 검토 (큰 수익 + 추세 둔화)", "#C0392B")
+        base = (t("holder_action_takeprofit_all"), "#C0392B")
     elif p >= 20 and r >= 70:
-        base = ("🎯 분할 익절 (50% 정리, 나머지 추세 추종)", "#E67E22")
+        base = (t("holder_action_takeprofit_part"), "#E67E22")
     elif p >= 5 and stance == "STRONG_BUY" and r < 65:
-        base = ("➕ 추가 매수 고려 (추세 강세 지속)", "#27AE60")
+        base = (t("holder_action_addbuy_strong"), "#27AE60")
     elif p <= -5 and cloud_pos == "above" and r < 40:
-        base = ("🤔 분할 추가매수 신중 (과매도 반등 노림)", "#3498DB")
+        base = (t("holder_action_addbuy_oversold"), "#3498DB")
     elif p >= 0 and bullish and r < 70:
-        base = ("🟢 홀딩 (추세 유효)", "#2ECC71")
+        base = (t("holder_action_hold_trend"), "#2ECC71")
     elif p < 0 and bullish:
-        base = ("⏸️ 홀딩 (추세 회복 대기)", "#5DADE2")
+        base = (t("holder_action_hold_wait"), "#5DADE2")
     elif bearish and p > 0:
-        base = ("⚠️ 일부 정리 검토 (추세 약화)", "#F39C12")
+        base = (t("holder_action_partial_exit"), "#F39C12")
     else:
-        base = ("➖ 관망 (방향성 불명확)", "#7F8C8D")
+        base = (t("holder_action_observe"), "#7F8C8D")
 
     # ── 2) 수급 보조 신호 (일목 액션은 유지, 라벨에 마크만 추가) ──
     if not flow_verdict:
@@ -105,19 +105,26 @@ def decide_holding_action(
 
     label, color = base
     fv = flow_verdict
-    bull_flow = ("동반 매수" in fv) or ("매수 전환" in fv)
-    bear_flow = ("동반 매도" in fv) or ("매도 전환" in fv)
+    # 한글/번체 모두 매칭: 한글 raw + 번체 키워드
+    bull_flow = (
+        ("동반 매수" in fv) or ("매수 전환" in fv)
+        or ("同步買入" in fv) or ("買入轉" in fv) or ("買進轉" in fv)
+    )
+    bear_flow = (
+        ("동반 매도" in fv) or ("매도 전환" in fv)
+        or ("同步賣出" in fv) or ("賣出轉" in fv)
+    )
 
     if bull_flow and (bearish or weak_trend):
         # 일목은 약세인데 수급은 강세 → 추세 반전 가능 (보유자는 손절 보류)
-        label = label + "  ·  🔵 수급 반전 신호"
+        label = label + "  ·  " + t("holder_flow_reversal")
     elif bear_flow and bullish:
         # 일목 강세인데 수급은 이탈 → 익절 우호
-        label = label + "  ·  ⚠️ 수급 이탈 주의"
+        label = label + "  ·  " + t("holder_flow_outflow_warn")
     elif bull_flow and bullish:
-        label = label + "  ·  ✅ 수급 동행"
+        label = label + "  ·  " + t("holder_flow_align_bull")
     elif bear_flow and bearish:
-        label = label + "  ·  ❌ 수급 약세"
+        label = label + "  ·  " + t("holder_flow_align_bear")
     # 혼조는 표기 생략 (노이즈)
 
     return (label, color)
@@ -142,7 +149,7 @@ def _fetch_flow_summary(code: str) -> dict | None:
         ri = int(flow.get("recent_inst_net") or 0)
         f_arrow = "↗" if rf > 0 else ("↘" if rf < 0 else "→")
         i_arrow = "↗" if ri > 0 else ("↘" if ri < 0 else "→")
-        detail = f"외인 {rf:+,}주 {f_arrow} · 기관 {ri:+,}주 {i_arrow}"
+        detail = t("flow_detail_format", f=rf, f_arrow=f_arrow, i=ri, i_arrow=i_arrow)
         return {"verdict": flow.get("verdict"), "detail": detail}
     except Exception:
         return None
@@ -312,10 +319,12 @@ with col_left:
 with col_right:
     st.subheader("🥧 " + t("portfolio_weight"))
     import pandas as pd
+    _col_stock = t("home_card_col_stock")
+    _col_eval = t("home_card_col_eval")
     weights = pd.DataFrame([
-        {"종목": s["name"], "평가금액": s["eval_amount"]}
+        {_col_stock: s["name"], _col_eval: s["eval_amount"]}
         for s in per_stock
-    ]).sort_values("평가금액", ascending=False).reset_index(drop=True)
+    ]).sort_values(_col_eval, ascending=False).reset_index(drop=True)
 
     if not weights.empty:
         import matplotlib.pyplot as plt
@@ -331,7 +340,7 @@ with col_right:
 
         fig, ax = plt.subplots(figsize=(5, 5))
         colors = plt.cm.Pastel1(range(len(weights)))
-        total = weights["평가금액"].sum()
+        total = weights[_col_eval].sum()
 
         # 작은 조각(<5%)은 라벨/% 표시 안 함 → 겹침 방지
         def _autopct(pct):
@@ -339,11 +348,11 @@ with col_right:
 
         labels_for_pie = [
             name if (val / total * 100) >= 5.0 else ""
-            for name, val in zip(weights["종목"], weights["평가금액"])
+            for name, val in zip(weights[_col_stock], weights[_col_eval])
         ]
 
         wedges, texts, autotexts = ax.pie(
-            weights["평가금액"],
+            weights[_col_eval],
             labels=labels_for_pie,
             autopct=_autopct,
             startangle=90,
@@ -357,7 +366,7 @@ with col_right:
         # 작은 비중 종목은 범례에 모두 표시
         legend_labels = [
             f"{name}  {val/total*100:.1f}%"
-            for name, val in zip(weights["종목"], weights["평가금액"])
+            for name, val in zip(weights[_col_stock], weights[_col_eval])
         ]
         ax.legend(wedges, legend_labels, title=t("portfolio_weight"),
                   loc="center left", bbox_to_anchor=(1.0, 0.5), fontsize=9)
@@ -374,10 +383,12 @@ st.divider()
 st.subheader("📊 " + t("per_stock_returns"))
 if per_stock:
     import pandas as pd
+    _bcol_stock = t("home_card_col_stock")
+    _bcol_pnl = t("home_card_col_pnl_pct")
     bar_df = pd.DataFrame([
-        {"종목": s["name"], "수익률(%)": round(s["pnl_pct"], 2)}
+        {_bcol_stock: s["name"], _bcol_pnl: round(s["pnl_pct"], 2)}
         for s in sorted_pnl
-    ]).set_index("종목")
+    ]).set_index(_bcol_stock)
     st.bar_chart(bar_df, height=250)
 
 st.divider()
@@ -400,10 +411,10 @@ for s in per_stock:
         alerts.append(("⚠️", s["name"], t("alert_bearish_full")))
     # 큰 손실
     if s["pnl_pct"] <= -10:
-        alerts.append(("🔻", s["name"], f"손익 {s['pnl_pct']:+.1f}% — {t('alert_review_stop')}"))
+        alerts.append(("🔻", s["name"], f"{t('alert_pnl_prefix')} {s['pnl_pct']:+.1f}% — {t('alert_review_stop')}"))
     # 큰 수익
     if s["pnl_pct"] >= 20:
-        alerts.append(("🎯", s["name"], f"손익 {s['pnl_pct']:+.1f}% — {t('alert_take_profit')}"))
+        alerts.append(("🎯", s["name"], f"{t('alert_pnl_prefix')} {s['pnl_pct']:+.1f}% — {t('alert_take_profit')}"))
 
 if not alerts:
     st.success(t("no_alerts"))
@@ -464,7 +475,7 @@ for i in range(0, len(per_stock), 3):
 
                 # 수급 시그널 (외국인/기관) — verdict + 세부 (A옵션)
                 if s.get("flow_verdict"):
-                    st.caption(f"💹 수급: {s['flow_verdict']}")
+                    st.caption(f"{t('home_card_supply')}: {s['flow_verdict']}")
                     if s.get("flow_detail"):
                         st.markdown(
                             f"<div style='font-size:0.78rem;color:#666;margin-left:18px;"
@@ -489,8 +500,8 @@ for i in range(0, len(per_stock), 3):
                     unsafe_allow_html=True,
                 )
                 if s.get("action"):
-                    st.caption(f"📊 신호: {s['action']}")
-                if st.button(f"🔬 " + t("detail_analysis"), key=f"dash_anly_{s['code']}", use_container_width=True):
+                    st.caption(f"{t('home_card_signal')}: {s['action']}")
+                if st.button(t("detail_analysis"), key=f"dash_anly_{s['code']}", use_container_width=True):
                     st.session_state["last_query"] = s["name"]
                     st.switch_page("pages/5_🔬_종목_분석.py")
 

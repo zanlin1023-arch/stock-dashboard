@@ -399,6 +399,341 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     # 거시경제 헤더
     # ════════════════════════════════
     "macro_no_data": {"ko": "데이터 없음", "zh-TW": "無資料"},
+
+    # ════════════════════════════════
+    # 홈 / 대시보드 보강
+    # ════════════════════════════════
+    "home_link_holdings_hint": {
+        "ko": "👉 [💼 보유 종목 페이지](/💼_보유_종목)에서 종목을 추가하면 여기서 종합 분석이 표시됩니다.",
+        "zh-TW": "👉 在 [💼 持股頁面](/💼_보유_종목) 新增個股後,此處將顯示綜合分析。",
+    },
+    "home_card_col_stock": {"ko": "종목", "zh-TW": "個股"},
+    "home_card_col_eval": {"ko": "평가금액", "zh-TW": "評估金額"},
+    "home_card_col_pnl_pct": {"ko": "수익률(%)", "zh-TW": "報酬率(%)"},
+    "home_card_sector_prefix": {"ko": "🏢", "zh-TW": "🏢"},
+    "home_card_supply": {"ko": "💹 수급", "zh-TW": "💹 籌碼"},
+    "home_card_signal": {"ko": "📊 신호", "zh-TW": "📊 訊號"},
+
+    # 보유자 액션 라벨
+    "holder_action_stoploss": {
+        "ko": "🔴 손절 검토 (손실 확대 + 추세 약화)",
+        "zh-TW": "🔴 考慮停損 (虧損擴大 + 趨勢轉弱)",
+    },
+    "holder_action_takeprofit_all": {
+        "ko": "💰 전량 익절 검토 (큰 수익 + 추세 둔화)",
+        "zh-TW": "💰 考慮全部停利 (大幅獲利 + 趨勢趨緩)",
+    },
+    "holder_action_takeprofit_part": {
+        "ko": "🎯 분할 익절 (50% 정리, 나머지 추세 추종)",
+        "zh-TW": "🎯 分批停利 (整理50%,其餘跟隨趨勢)",
+    },
+    "holder_action_addbuy_strong": {
+        "ko": "➕ 추가 매수 고려 (추세 강세 지속)",
+        "zh-TW": "➕ 考慮加碼 (強勢趨勢持續)",
+    },
+    "holder_action_addbuy_oversold": {
+        "ko": "🤔 분할 추가매수 신중 (과매도 반등 노림)",
+        "zh-TW": "🤔 謹慎分批加碼 (押注超賣反彈)",
+    },
+    "holder_action_hold_trend": {
+        "ko": "🟢 홀딩 (추세 유효)",
+        "zh-TW": "🟢 續抱 (趨勢有效)",
+    },
+    "holder_action_hold_wait": {
+        "ko": "⏸️ 홀딩 (추세 회복 대기)",
+        "zh-TW": "⏸️ 續抱 (等待趨勢回升)",
+    },
+    "holder_action_partial_exit": {
+        "ko": "⚠️ 일부 정리 검토 (추세 약화)",
+        "zh-TW": "⚠️ 考慮部分出場 (趨勢轉弱)",
+    },
+    "holder_action_observe": {
+        "ko": "➖ 관망 (방향성 불명확)",
+        "zh-TW": "➖ 觀望 (方向不明)",
+    },
+    "holder_flow_reversal": {"ko": "🔵 수급 반전 신호", "zh-TW": "🔵 籌碼反轉訊號"},
+    "holder_flow_outflow_warn": {"ko": "⚠️ 수급 이탈 주의", "zh-TW": "⚠️ 注意籌碼流出"},
+    "holder_flow_align_bull": {"ko": "✅ 수급 동행", "zh-TW": "✅ 籌碼同步"},
+    "holder_flow_align_bear": {"ko": "❌ 수급 약세", "zh-TW": "❌ 籌碼弱勢"},
+    "flow_detail_format": {
+        "ko": "외인 {f:+,}주 {f_arrow} · 기관 {i:+,}주 {i_arrow}",
+        "zh-TW": "外資 {f:+,}股 {f_arrow} · 機構 {i:+,}股 {i_arrow}",
+    },
+    "supply_label": {"ko": "수급", "zh-TW": "籌碼"},
+    "signal_label": {"ko": "신호", "zh-TW": "訊號"},
+
+    # 분석 손익 라벨 prefix (alerts)
+    "alert_pnl_prefix": {"ko": "손익", "zh-TW": "損益"},
+
+    # ════════════════════════════════
+    # 💼 보유 종목 보강
+    # ════════════════════════════════
+    "holdings_autofill_fail": {"ko": "자동 채우기 실패", "zh-TW": "自動填寫失敗"},
+    "holdings_input_name_required": {"ko": "종목명을 입력하세요", "zh-TW": "請輸入股票名稱"},
+    "holdings_register_done": {"ko": "등록 완료", "zh-TW": "註冊完成"},
+    "holdings_register_fail": {"ko": "등록 실패", "zh-TW": "註冊失敗"},
+    "holdings_auto_analyzing": {"ko": "자동 분석 중...", "zh-TW": "自動分析中..."},
+    "holdings_history_saved": {"ko": "📥 분석 히스토리 저장 완료", "zh-TW": "📥 已儲存分析歷史"},
+    "holdings_auto_analysis_fail": {
+        "ko": "⚠️ 자동 분석 실패 (등록은 완료)",
+        "zh-TW": "⚠️ 自動分析失敗 (註冊已完成)",
+    },
+    "holdings_col_stock": {"ko": "종목", "zh-TW": "個股"},
+    "holdings_col_sector": {"ko": "섹터", "zh-TW": "產業"},
+    "holdings_col_theme": {"ko": "테마", "zh-TW": "主題"},
+    "holdings_col_avg": {"ko": "평단가", "zh-TW": "平均成本"},
+    "holdings_col_cur": {"ko": "현재가", "zh-TW": "現價"},
+    "holdings_col_qty": {"ko": "수량", "zh-TW": "數量"},
+    "holdings_col_buy_amt": {"ko": "매수금액", "zh-TW": "購買金額"},
+    "holdings_col_eval_amt": {"ko": "평가금액", "zh-TW": "評估金額"},
+    "holdings_col_pnl": {"ko": "손익", "zh-TW": "損益"},
+    "holdings_col_pnl_pct": {"ko": "수익률", "zh-TW": "報酬率"},
+    "holdings_col_buy_date": {"ko": "매수일", "zh-TW": "購買日期"},
+    "holdings_col_note": {"ko": "메모", "zh-TW": "備註"},
+    "holdings_source": {"ko": "출처", "zh-TW": "來源"},
+
+    # ════════════════════════════════
+    # ⭐ 관심 종목 보강
+    # ════════════════════════════════
+    "watchlist_added": {"ko": "추가됨", "zh-TW": "已新增"},
+    "watchlist_add_fail": {"ko": "추가 실패", "zh-TW": "新增失敗"},
+    "watchlist_table_view": {"ko": "📊 관심 목록 (표 보기)", "zh-TW": "📊 自選股清單 (表格檢視)"},
+    "watchlist_col_stock": {"ko": "종목", "zh-TW": "個股"},
+    "watchlist_col_cur": {"ko": "현재가", "zh-TW": "現價"},
+    "watchlist_col_prev": {"ko": "전일대비", "zh-TW": "與前日比"},
+    "watchlist_col_tags": {"ko": "태그", "zh-TW": "標籤"},
+    "watchlist_col_note": {"ko": "메모", "zh-TW": "備註"},
+    "watchlist_col_added": {"ko": "추가일", "zh-TW": "新增日期"},
+
+    # ════════════════════════════════
+    # 📜 분석 히스토리 보강
+    # ════════════════════════════════
+    "history_db_client_fail": {"ko": "DB 클라이언트 로드 실패", "zh-TW": "資料庫客戶端載入失敗"},
+    "hist_col_analyzed_at": {"ko": "분석시각 (KST)", "zh-TW": "分析時間 (KST)"},
+    "hist_col_stock": {"ko": "종목", "zh-TW": "個股"},
+    "hist_col_price": {"ko": "현재가", "zh-TW": "現價"},
+    "hist_col_rsi": {"ko": "RSI", "zh-TW": "RSI"},
+    "hist_col_cloud": {"ko": "구름", "zh-TW": "雲層"},
+    "hist_col_decision": {"ko": "판단", "zh-TW": "判斷"},
+    "hist_col_future_1st": {"ko": "🔺 1차 (피크)", "zh-TW": "🔺 第1次 (高峰)"},
+    "hist_col_future_2nd": {"ko": "🔻 2차 (조정)", "zh-TW": "🔻 第2次 (回調)"},
+    "hist_col_future_3rd": {"ko": "🔺 3차 (재상승)", "zh-TW": "🔺 第3次 (再上漲)"},
+    "hist_col_flow": {"ko": "💹 수급", "zh-TW": "💹 籌碼"},
+    "hist_col_target_n": {"ko": "N목표", "zh-TW": "N目標"},
+    "hist_col_stop": {"ko": "손절", "zh-TW": "停損"},
+    "hist_cloud_above": {"ko": "위 ↑", "zh-TW": "上方 ↑"},
+    "hist_cloud_below": {"ko": "아래 ↓", "zh-TW": "下方 ↓"},
+    "hist_cloud_inside": {"ko": "안 ↔", "zh-TW": "內部 ↔"},
+    "hist_future_path_header": {
+        "ko": "**📈 미래 추세 예측 (N파동 시나리오)**",
+        "zh-TW": "**📈 未來趨勢預測 (N波情境)**",
+    },
+    "hist_future_peak": {"ko": "🔺 피크", "zh-TW": "🔺 高峰"},
+    "hist_future_pullback": {"ko": "🔻 조정", "zh-TW": "🔻 回調"},
+    "hist_future_no_data": {"ko": "ℹ️ 미래 경로 데이터 없음", "zh-TW": "ℹ️ 無未來路徑資料"},
+    "hist_flow_header": {
+        "ko": "**💹 외국인/기관 수급 (7일)**",
+        "zh-TW": "**💹 外資/機構籌碼 (7日)**",
+    },
+    "hist_flow_summary": {"ko": "종합", "zh-TW": "綜合"},
+    "hist_flow_no_data": {"ko": "ℹ️ 수급 데이터 없음", "zh-TW": "ℹ️ 無籌碼資料"},
+    "hist_cycle_header": {
+        "ko": "**⏰ 다음 시간 변곡점 (일목 시간론)**",
+        "zh-TW": "**⏰ 下個時間轉折點 (一目時間論)**",
+    },
+    "hist_swing_header": {"ko": "**🔄 스윙 포인트**", "zh-TW": "**🔄 擺動點**"},
+    "hist_pattern_header": {
+        "ko": "**🔍 패턴 매칭 (과거 유사 패턴 기반 미래 예측)**",
+        "zh-TW": "**🔍 模式比對 (基於過往相似模式的未來預測)**",
+    },
+    "hist_pattern_similar": {
+        "ko": "유사 패턴 **{pc}개** (평균 상관계수 r={r})",
+        "zh-TW": "相似模式 **{pc} 個** (平均相關係數 r={r})",
+    },
+    "hist_pattern_avg": {
+        "ko": "20봉 후 평균: **{val:,.0f}원** ({pct:+.1f}%)",
+        "zh-TW": "20根K棒後平均: **{val:,.0f} 元** ({pct:+.1f}%)",
+    },
+    "hist_pattern_lowhigh": {
+        "ko": "  · 보수(low): {low:,.0f} · 낙관(high): {high:,.0f}",
+        "zh-TW": "  · 保守(low): {low:,.0f} · 樂觀(high): {high:,.0f}",
+    },
+    "hist_pattern_matched_periods": {"ko": "  · 매칭 구간", "zh-TW": "  · 比對區間"},
+    "hist_rawdata_note": {
+        "ko": "💡 future_path / flow / cycles 데이터는 코드 업데이트 (2026-05-26) 이후 분석부터 raw_data에 저장됩니다.",
+        "zh-TW": "💡 future_path / flow / cycles 資料自程式更新 (2026-05-26) 後的分析才會儲存於 raw_data。",
+    },
+    "hist_chart_loading": {"ko": "🔍 최신 일목균형표 차트 생성 중...", "zh-TW": "🔍 生成最新一目均衡表圖中..."},
+    "hist_chart_fail": {"ko": "⚠️ 차트 실패", "zh-TW": "⚠️ 圖表生成失敗"},
+    "hist_chart_mismatch_warn": {
+        "ko": "⚠️ **차트는 오늘 기준** · **raw_data는 분석 시점({when}) 기준** — 미래 경로/사이클은 분석 당시 예측이라 현재 차트와 일치하지 않을 수 있음",
+        "zh-TW": "⚠️ **圖表以今日為準** · **raw_data 以分析時點 ({when}) 為準** — 未來路徑/週期為當時預測,可能與現在圖表不符",
+    },
+    "hist_trend_col_time": {"ko": "시각", "zh-TW": "時間"},
+    "hist_trend_col_price": {"ko": "현재가", "zh-TW": "現價"},
+    "hist_trend_col_rsi": {"ko": "RSI", "zh-TW": "RSI"},
+    "hist_trend_col_target_n": {"ko": "N목표", "zh-TW": "N目標"},
+    "hist_trend_col_tenkan": {"ko": "전환선", "zh-TW": "轉換線"},
+    "hist_trend_col_kijun": {"ko": "기준선", "zh-TW": "基準線"},
+    "hist_tab_price_target": {"ko": "💰 가격 + 목표가", "zh-TW": "💰 價格 + 目標價"},
+    "hist_tab_rsi": {"ko": "📊 RSI", "zh-TW": "📊 RSI"},
+    "hist_tab_ichimoku5": {"ko": "🌥 일목 5선", "zh-TW": "🌥 一目5線"},
+    "hist_rsi_caption": {"ko": "70+ 과매수 / 30- 과매도 / 50 중립", "zh-TW": "70+ 超買 / 30- 超賣 / 50 中立"},
+    "hist_ichimoku5_pending": {"ko": "일목 데이터가 누적되면 표시", "zh-TW": "一目資料累積後顯示"},
+    "hist_trend_need_more": {
+        "ko": "💡 추이 차트는 같은 종목 자동 분석 2회 이상 누적되면 표시됩니다. 현재 {n}건.",
+        "zh-TW": "💡 趨勢圖需同一個股自動分析累積2次以上才顯示。目前 {n} 筆。",
+    },
+    "hist_raw_daily_title": {"ko": "#### 🗂 일자별 누적 raw_data", "zh-TW": "#### 🗂 日別累積 raw_data"},
+    "hist_raw_manual_title": {"ko": "#### 🗂 누적 분석 데이터 (DB raw_data)", "zh-TW": "#### 🗂 累積分析資料 (DB raw_data)"},
+    "hist_candle_unit": {"ko": "봉", "zh-TW": "K棒"},
+    "hist_won_suffix": {"ko": "원", "zh-TW": "元"},
+    "hist_future_path_item": {
+        "ko": "{role} · **{label}** ({cycle}봉 후) → **{price:,.0f}원** ({pct:+.1f}%)",
+        "zh-TW": "{role} · **{label}** ({cycle}根K棒後) → **{price:,.0f} 元** ({pct:+.1f}%)",
+    },
+    "hist_cycle_item": {"ko": "  · +{cycle}봉 후", "zh-TW": "  · +{cycle}根K棒後"},
+    "hist_swing_item": {
+        "ko": "  A: {a:,.0f} · B: {b:,.0f} · C: {c:,.0f}",
+        "zh-TW": "  A: {a:,.0f} · B: {b:,.0f} · C: {c:,.0f}",
+    },
+
+    # ════════════════════════════════
+    # 🔬 종목 분석 보강
+    # ════════════════════════════════
+    "analyze_sector_compare": {"ko": "🏢 동종업종 비교", "zh-TW": "🏢 同產業比較"},
+    "analyze_sector_loading": {"ko": "동종업종 종목 조회 중...", "zh-TW": "查詢同產業個股中..."},
+    "analyze_sector_default_label": {"ko": "동종업종", "zh-TW": "同產業"},
+    "analyze_sector_top": {"ko": "📂 **{label}** · 상위 {n}개 종목", "zh-TW": "📂 **{label}** · 前 {n} 檔個股"},
+    "analyze_sector_self": {"ko": "👈 본인", "zh-TW": "👈 本檔"},
+    "analyze_sector_col_compare": {"ko": "비교", "zh-TW": "比較"},
+    "analyze_sector_col_stock": {"ko": "종목", "zh-TW": "個股"},
+    "analyze_sector_col_price": {"ko": "현재가", "zh-TW": "現價"},
+    "analyze_sector_col_change": {"ko": "등락률", "zh-TW": "漲跌幅"},
+    "analyze_sector_summary": {
+        "ko": "📊 섹터 평균 등락률: <strong style='color:{color};'>{avg:+.2f}%</strong> · 본인 등락률: <strong>{own:+.2f}%</strong>",
+        "zh-TW": "📊 產業平均漲跌幅: <strong style='color:{color};'>{avg:+.2f}%</strong> · 本檔漲跌幅: <strong>{own:+.2f}%</strong>",
+    },
+    "analyze_sector_unavailable": {"ko": "ℹ️ 동종업종 데이터를 가져올 수 없습니다.", "zh-TW": "ℹ️ 無法取得同產業資料。"},
+    "analyze_db_save_warn": {"ko": "⚠️ DB 저장 실패", "zh-TW": "⚠️ DB 儲存失敗"},
+    "analyze_ma_period": {"ko": "기간", "zh-TW": "期間"},
+    "analyze_ma_value": {"ko": "값", "zh-TW": "數值"},
+    "analyze_ma_5": {"ko": "5일선", "zh-TW": "5日線"},
+    "analyze_ma_20": {"ko": "20일선", "zh-TW": "20日線"},
+    "analyze_ma_60": {"ko": "60일선", "zh-TW": "60日線"},
+    "analyze_ma_120": {"ko": "120일선", "zh-TW": "120日線"},
+    "analyze_won_suffix": {"ko": "원", "zh-TW": "元"},
+    "analyze_wave_body": {
+        "ko": """
+            - **A (시작 저점)**: {a_price:,.0f}원 ({a_date})
+            - **B (고점)**: {b_price:,.0f}원 ({b_date})
+            - **C (조정 저점)**: {c_price:,.0f}원 ({c_date})
+            - **C 형성 여부**: {c_formed}
+
+            **파동론 공식**:
+            - V = B + (B − C) = {v:,.0f}
+            - N = C + (B − A) = {n:,.0f}
+            - E = B + (B − A) = {e:,.0f}
+            """,
+        "zh-TW": """
+            - **A (起始低點)**: {a_price:,.0f} 元 ({a_date})
+            - **B (高點)**: {b_price:,.0f} 元 ({b_date})
+            - **C (回調低點)**: {c_price:,.0f} 元 ({c_date})
+            - **C 是否形成**: {c_formed}
+
+            **波浪論公式**:
+            - V = B + (B − C) = {v:,.0f}
+            - N = C + (B − A) = {n:,.0f}
+            - E = B + (B − A) = {e:,.0f}
+            """,
+    },
+    "analyze_wave_c_formed": {"ko": "✅ 형성", "zh-TW": "✅ 已形成"},
+    "analyze_wave_c_not_formed": {"ko": "⚠️ 미형성 (신규 추세 진행 중)", "zh-TW": "⚠️ 未形成 (新趨勢進行中)"},
+
+    # ════════════════════════════════
+    # 🆚 종목 비교 (deprecated)
+    # ════════════════════════════════
+    "compare_title": {"ko": "🆚 종목 비교", "zh-TW": "🆚 個股比較"},
+    "compare_moved_info": {
+        "ko": "이 기능은 **🎯 추천 종목** 페이지 각 카드 내부의 **🏢 섹터 · 관련주 비교** expander로 통합되었습니다.",
+        "zh-TW": "此功能已整合至 **🎯 推薦個股** 頁面各卡片內部的 **🏢 產業·相關股比較** 展開區。",
+    },
+    "compare_goto_recommend": {"ko": "🎯 추천 종목으로 이동", "zh-TW": "🎯 前往推薦個股"},
+
+    # ════════════════════════════════
+    # 📅 캘린더
+    # ════════════════════════════════
+    "calendar_title": {"ko": "📅 공시 · 경제 캘린더", "zh-TW": "📅 公示 · 經濟日曆"},
+    "calendar_caption": {
+        "ko": "보유/관심 종목 공시 (OpenDART) + 주요 거시 일정",
+        "zh-TW": "持股/自選股公示 (OpenDART) + 主要總體經濟行事曆",
+    },
+    "calendar_start_date": {"ko": "시작일", "zh-TW": "起始日"},
+    "calendar_end_date": {"ko": "종료일", "zh-TW": "結束日"},
+    "calendar_include_macro": {"ko": "거시 일정 포함", "zh-TW": "包含總經行事曆"},
+    "calendar_only_my": {"ko": "내 종목만 (보유+관심)", "zh-TW": "僅我的個股 (持股+自選)"},
+    "calendar_disclosure_title": {"ko": "📰 종목 공시", "zh-TW": "📰 個股公示"},
+    "calendar_need_register": {
+        "ko": "💡 보유 또는 관심 종목을 먼저 등록하세요.",
+        "zh-TW": "💡 請先登錄持股或自選股。",
+    },
+    "calendar_loading_n": {"ko": "{n}개 종목 공시 조회 중...", "zh-TW": "查詢 {n} 檔個股公示中..."},
+    "calendar_no_disclosure": {"ko": "📭 해당 기간 공시 없음", "zh-TW": "📭 該期間無公示"},
+    "calendar_disclosure_count": {"ko": "건", "zh-TW": "筆"},
+    "calendar_filer": {"ko": "제출인", "zh-TW": "提交人"},
+    "calendar_macro_title": {"ko": "🌍 주요 거시 일정 (참고)", "zh-TW": "🌍 主要總經行事曆 (參考)"},
+    "calendar_macro_caption": {
+        "ko": "정기 일정 안내 — 정확한 일정은 한국은행/연준 공식 발표 확인",
+        "zh-TW": "定期行事曆指引 — 精確時間請參考韓國銀行/聯準會官方公告",
+    },
+    "calendar_macro_bok_when": {"ko": "매월 둘째주 목", "zh-TW": "每月第二週四"},
+    "calendar_macro_bok_what": {"ko": "🏛 한국은행 금통위 (기준금리 결정)", "zh-TW": "🏛 韓國銀行金融貨幣委員會 (基準利率決議)"},
+    "calendar_macro_fomc_when": {"ko": "매월 둘째주 목", "zh-TW": "每月第二週四"},
+    "calendar_macro_fomc_what": {"ko": "🇺🇸 FOMC 회의 (3·6·9·12월 분기 중)", "zh-TW": "🇺🇸 FOMC 會議 (3·6·9·12月季度中)"},
+    "calendar_macro_kosis_when": {"ko": "매월 1·15일", "zh-TW": "每月 1·15日"},
+    "calendar_macro_kosis_what": {"ko": "📊 KOSIS 주요 경제지표 발표", "zh-TW": "📊 KOSIS 主要經濟指標公佈"},
+    "calendar_macro_nfp_when": {"ko": "매주 금요일 21:30 KST", "zh-TW": "每週五 21:30 KST"},
+    "calendar_macro_nfp_what": {"ko": "🇺🇸 미국 비농업고용지표 (월 첫 금)", "zh-TW": "🇺🇸 美國非農就業數據 (每月第一個週五)"},
+    "calendar_macro_jobless_when": {"ko": "매주 목요일 21:30 KST", "zh-TW": "每週四 21:30 KST"},
+    "calendar_macro_jobless_what": {"ko": "🇺🇸 신규 실업수당 청구건수", "zh-TW": "🇺🇸 美國初次申請失業救濟金人數"},
+    "calendar_macro_cpi_when": {"ko": "매월 셋째주 목 21:30 KST", "zh-TW": "每月第三週四 21:30 KST"},
+    "calendar_macro_cpi_what": {"ko": "🇺🇸 CPI 발표 (전월 데이터)", "zh-TW": "🇺🇸 CPI 公佈 (前月數據)"},
+    "calendar_footer": {
+        "ko": "ℹ️ OpenDART 공시는 보유/관심 종목 한정. 전체 공시는 [DART](https://dart.fss.or.kr/) 직접 검색.",
+        "zh-TW": "ℹ️ OpenDART 公示僅限持股/自選股。全部公示請至 [DART](https://dart.fss.or.kr/) 直接搜尋。",
+    },
+
+    # ════════════════════════════════
+    # 🌡️ 시장 히트맵
+    # ════════════════════════════════
+    "heatmap_title": {"ko": "🌡️ 시장 히트맵", "zh-TW": "🌡️ 市場熱力圖"},
+    "heatmap_caption": {
+        "ko": "시가총액 = 박스 크기 · 등락률 = 색상 (빨강↑/파랑↓)",
+        "zh-TW": "市值 = 方塊大小 · 漲跌幅 = 顏色 (紅↑/藍↓)",
+    },
+    "heatmap_market": {"ko": "시장", "zh-TW": "市場"},
+    "heatmap_market_all": {"ko": "전체", "zh-TW": "全部"},
+    "heatmap_top_n": {"ko": "상위 N개", "zh-TW": "前 N 檔"},
+    "heatmap_refresh": {"ko": "🔄 새로고침", "zh-TW": "🔄 重新整理"},
+    "heatmap_loading": {"ko": "{market} 시총 상위 {n}개 조회 중... (최대 30초)", "zh-TW": "查詢 {market} 市值前 {n} 檔中... (最多30秒)"},
+    "heatmap_no_data": {"ko": "데이터를 가져올 수 없습니다.", "zh-TW": "無法取得資料。"},
+    "heatmap_squarify_missing": {
+        "ko": "squarify 패키지가 필요합니다. requirements.txt에 추가하고 재배포하세요:\n```\nsquarify>=0.4\n```",
+        "zh-TW": "需要 squarify 套件。請加入 requirements.txt 後重新部署:\n```\nsquarify>=0.4\n```",
+    },
+    "heatmap_chart_title": {
+        "ko": "{market} 시가총액 상위 {n}개 — 박스 크기=시총, 색상=등락률",
+        "zh-TW": "{market} 市值前 {n} 檔 — 方塊大小=市值, 顏色=漲跌幅",
+    },
+    "heatmap_table_title": {"ko": "📋 상세 표", "zh-TW": "📋 詳細表格"},
+    "heatmap_col_stock": {"ko": "종목", "zh-TW": "個股"},
+    "heatmap_col_marketcap": {"ko": "시가총액 (조)", "zh-TW": "市值 (兆)"},
+    "heatmap_col_close": {"ko": "종가", "zh-TW": "收盤價"},
+    "heatmap_col_change": {"ko": "등락률", "zh-TW": "漲跌幅"},
+    "heatmap_metric_up": {"ko": "📈 상승", "zh-TW": "📈 上漲"},
+    "heatmap_metric_down": {"ko": "📉 하락", "zh-TW": "📉 下跌"},
+    "heatmap_metric_flat": {"ko": "➖ 보합", "zh-TW": "➖ 持平"},
+    "heatmap_metric_avg": {"ko": "평균 등락률", "zh-TW": "平均漲跌幅"},
 }
 
 

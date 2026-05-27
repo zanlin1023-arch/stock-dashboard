@@ -10,27 +10,29 @@ from datetime import datetime, timedelta
 import streamlit as st
 
 from common import init_page, sidebar_nav, render_macro_header, nav_bar
+from i18n import t
 
 st.set_page_config(page_title="시장 히트맵", page_icon="🌡️", layout="wide")
-init_page("시장 히트맵")
+init_page(t("heatmap_title"))
 sidebar_nav()
 render_macro_header()
 nav_bar("heatmap")
 
-st.title("🌡️ 시장 히트맵")
-st.caption("시가총액 = 박스 크기 · 등락률 = 색상 (빨강↑/파랑↓)")
+st.title(t("heatmap_title"))
+st.caption(t("heatmap_caption"))
 
 
 # ──────────────────────────────────────────
 # 컨트롤
 # ──────────────────────────────────────────
+_market_all = t("heatmap_market_all")
 c1, c2, c3 = st.columns(3)
 with c1:
-    market = st.selectbox("시장", ["KOSPI", "KOSDAQ", "전체"])
+    market = st.selectbox(t("heatmap_market"), ["KOSPI", "KOSDAQ", _market_all])
 with c2:
-    top_n = st.slider("상위 N개", 20, 100, 50, step=10)
+    top_n = st.slider(t("heatmap_top_n"), 20, 100, 50, step=10)
 with c3:
-    refresh = st.button("🔄 새로고침")
+    refresh = st.button(t("heatmap_refresh"))
 
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -55,6 +57,7 @@ def _fetch_market_caps(market_filter: str, n: int) -> list[dict]:
     elif market_filter == "KOSDAQ":
         sosoks = [("1", "KOSDAQ")]
     else:
+        # "전체" / "全部" 등 모든 다국어 변형 → KOSPI + KOSDAQ
         sosoks = [("0", "KOSPI"), ("1", "KOSDAQ")]
 
     out: list[dict] = []
@@ -118,11 +121,11 @@ def _fetch_market_caps(market_filter: str, n: int) -> list[dict]:
     return out[:n]
 
 
-with st.spinner(f"{market} 시총 상위 {top_n}개 조회 중... (최대 30초)"):
+with st.spinner(t("heatmap_loading", market=market, n=top_n)):
     items = _fetch_market_caps(market, top_n)
 
 if not items:
-    st.warning("데이터를 가져올 수 없습니다.")
+    st.warning(t("heatmap_no_data"))
     st.stop()
 
 
@@ -165,9 +168,7 @@ def _color_for_change(chg: float) -> str:
 try:
     import squarify
 except ImportError:
-    st.error(
-        "squarify 패키지가 필요합니다. requirements.txt에 추가하고 재배포하세요:\n```\nsquarify>=0.4\n```"
-    )
+    st.error(t("heatmap_squarify_missing"))
     st.stop()
 
 sizes = [it["market_cap"] for it in items]
@@ -189,7 +190,7 @@ squarify.plot(
 )
 ax.axis("off")
 ax.set_title(
-    f"{market} 시가총액 상위 {len(items)}개 — 박스 크기=시총, 색상=등락률",
+    t("heatmap_chart_title", market=market, n=len(items)),
     fontsize=14, fontweight="bold",
 )
 st.pyplot(fig, use_container_width=True)
@@ -199,15 +200,19 @@ st.pyplot(fig, use_container_width=True)
 # 표 (정렬 가능)
 # ──────────────────────────────────────────
 st.divider()
-st.subheader("📋 상세 표")
+st.subheader(t("heatmap_table_title"))
 import pandas as pd
+_hcol_stock = t("heatmap_col_stock")
+_hcol_cap = t("heatmap_col_marketcap")
+_hcol_close = t("heatmap_col_close")
+_hcol_change = t("heatmap_col_change")
 rows = []
 for it in items:
     rows.append({
-        "종목": f"{it['name']} ({it['code']})",
-        "시가총액 (조)": f"{it['market_cap'] / 1e12:.2f}",
-        "종가": f"{int(it['close']):,}",
-        "등락률": f"{it['change_pct']:+.2f}%",
+        _hcol_stock: f"{it['name']} ({it['code']})",
+        _hcol_cap: f"{it['market_cap'] / 1e12:.2f}",
+        _hcol_close: f"{int(it['close']):,}",
+        _hcol_change: f"{it['change_pct']:+.2f}%",
     })
 st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
@@ -218,7 +223,7 @@ flat = len(items) - up - down
 avg_chg = sum(it["change_pct"] for it in items) / len(items)
 
 sc1, sc2, sc3, sc4 = st.columns(4)
-sc1.metric("📈 상승", up)
-sc2.metric("📉 하락", down)
-sc3.metric("➖ 보합", flat)
-sc4.metric("평균 등락률", f"{avg_chg:+.2f}%")
+sc1.metric(t("heatmap_metric_up"), up)
+sc2.metric(t("heatmap_metric_down"), down)
+sc3.metric(t("heatmap_metric_flat"), flat)
+sc4.metric(t("heatmap_metric_avg"), f"{avg_chg:+.2f}%")

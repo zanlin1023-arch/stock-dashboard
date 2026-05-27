@@ -10,7 +10,7 @@ from common import init_page, get_db, nav_bar, sidebar_nav, render_macro_header
 from i18n import t
 
 st.set_page_config(page_title="보유 종목", page_icon="💼", layout="wide")
-init_page("보유 종목")
+init_page(t("holdings_title"))
 sidebar_nav()
 render_macro_header()
 nav_bar("holdings")
@@ -51,9 +51,9 @@ with st.expander(t("holdings_add"), expanded=False):
                 st.session_state["hold_auto_name"] = name
                 st.session_state["hold_auto_code"] = code
                 src_emoji = {"claude": "🤖", "openai": "🤖", "naver": "🌐", "fdr": "📊"}.get(info.get("source"), "📋")
-                st.success(f"{src_emoji} {name} ({code}) | 출처: {info.get('source')}")
+                st.success(f"{src_emoji} {name} ({code}) | {t('holdings_source')}: {info.get('source')}")
             except Exception as e:
-                st.error(f"자동 채우기 실패: {e}")
+                st.error(f"{t('holdings_autofill_fail')}: {e}")
 
     with st.form("add_holding"):
         col1, col2 = st.columns(2)
@@ -79,7 +79,7 @@ with st.expander(t("holdings_add"), expanded=False):
         if submitted:
             target_query = query_outside.strip() or st.session_state.get("hold_auto_name", "")
             if not target_query:
-                st.warning("종목명을 입력하세요")
+                st.warning(t("holdings_input_name_required"))
             else:
                 try:
                     from _utils import resolve_ticker
@@ -88,10 +88,10 @@ with st.expander(t("holdings_add"), expanded=False):
                     db.add_holding(code, name, avg_price, quantity, use_date, note)
                     for k in ["hold_auto_note", "hold_auto_name", "hold_auto_code"]:
                         st.session_state.pop(k, None)
-                    st.success(f"✅ {name} ({code}) 등록 완료")
+                    st.success(f"✅ {name} ({code}) {t('holdings_register_done')}")
 
                     # 신규 등록 즉시 1회 종목 분석 → 히스토리에 저장
-                    with st.spinner(f"🔬 {name} 자동 분석 중..."):
+                    with st.spinner(f"🔬 {name} {t('holdings_auto_analyzing')}"):
                         try:
                             import technical
                             from chart_ichimoku import (
@@ -150,13 +150,13 @@ with st.expander(t("holdings_add"), expanded=False):
                                 pattern_match=pattern_data,
                             )
                             if saved:
-                                st.success(f"📥 분석 히스토리 저장 완료 — {decision.get('action', '')}")
+                                st.success(f"{t('holdings_history_saved')} — {decision.get('action', '')}")
                         except Exception as ana_err:
-                            st.warning(f"⚠️ 자동 분석 실패 (등록은 완료): {ana_err}")
+                            st.warning(f"{t('holdings_auto_analysis_fail')}: {ana_err}")
 
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ 등록 실패: {e}")
+                    st.error(f"❌ {t('holdings_register_fail')}: {e}")
 
 
 # ──────────────────────────────────────────
@@ -203,6 +203,18 @@ def _fetch_meta(code: str, name: str) -> dict:
 rows = []
 total_buy = 0.0
 total_eval = 0.0
+_lbl_stock = t("holdings_col_stock")
+_lbl_sector = t("holdings_col_sector")
+_lbl_theme = t("holdings_col_theme")
+_lbl_avg = t("holdings_col_avg")
+_lbl_cur = t("holdings_col_cur")
+_lbl_qty = t("holdings_col_qty")
+_lbl_buy_amt = t("holdings_col_buy_amt")
+_lbl_eval_amt = t("holdings_col_eval_amt")
+_lbl_pnl = t("holdings_col_pnl")
+_lbl_pnl_pct = t("holdings_col_pnl_pct")
+_lbl_buy_date = t("holdings_col_buy_date")
+_lbl_note = t("holdings_col_note")
 for h in holdings:
     cur = _fetch_current_price(h["stock_code"])
     meta = _fetch_meta(h["stock_code"], h["stock_name"])
@@ -217,18 +229,18 @@ for h in holdings:
     themes_str = " · ".join(meta["themes"][:3])
     rows.append({
         "id": h["id"],
-        "종목": f"{h['stock_name']} ({h['stock_code']})",
-        "섹터": meta["sector"] or "-",
-        "테마": themes_str or "-",
-        "평단가": f"{avg:,.0f}",
-        "현재가": f"{cur:,.0f}" if cur else "-",
-        "수량": qty,
-        "매수금액": f"{buy_amount:,.0f}",
-        "평가금액": f"{eval_amount:,.0f}",
-        "손익": f"{pnl:+,.0f}",
-        "수익률": f"{pnl_pct:+.2f}%",
-        "매수일": h["purchase_date"],
-        "메모": h.get("note", "") or "",
+        _lbl_stock: f"{h['stock_name']} ({h['stock_code']})",
+        _lbl_sector: meta["sector"] or "-",
+        _lbl_theme: themes_str or "-",
+        _lbl_avg: f"{avg:,.0f}",
+        _lbl_cur: f"{cur:,.0f}" if cur else "-",
+        _lbl_qty: qty,
+        _lbl_buy_amt: f"{buy_amount:,.0f}",
+        _lbl_eval_amt: f"{eval_amount:,.0f}",
+        _lbl_pnl: f"{pnl:+,.0f}",
+        _lbl_pnl_pct: f"{pnl_pct:+.2f}%",
+        _lbl_buy_date: h["purchase_date"],
+        _lbl_note: h.get("note", "") or "",
     })
 
 
@@ -253,7 +265,7 @@ st.dataframe(df_display, use_container_width=True, hide_index=True)
 # 삭제
 # ──────────────────────────────────────────
 with st.expander(t("delete_stock")):
-    options = {f"{r['종목']} (id={r['id']})": r["id"] for r in rows}
+    options = {f"{r[_lbl_stock]} (id={r['id']})": r["id"] for r in rows}
     selected = st.selectbox(t("delete_target"), options.keys())
     if st.button(t("btn_delete"), type="secondary"):
         try:

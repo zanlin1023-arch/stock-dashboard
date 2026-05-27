@@ -32,7 +32,7 @@ if not os.getenv("SUPABASE_URL"):
                 os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
 
-def run_daily_recommend(top_n: int = 5, session: str = "evening") -> dict:
+def run_daily_recommend(top_n: int = 5, session: str = "evening", target_date: str | None = None) -> dict:
     from analyzer import db
     import recommend
 
@@ -66,8 +66,8 @@ def run_daily_recommend(top_n: int = 5, session: str = "evening") -> dict:
         print("[WARN] 추천 종목 없음. 저장 건너뜀.")
         return {"status": "no_results"}
 
-    saved = db.save_recommendations(results, session=session)
-    print(f"[OK] DB 저장 완료: {saved}건")
+    saved = db.save_recommendations(results, session=session, target_date=target_date)
+    print(f"[OK] DB 저장 완료: {saved}건 (date={target_date or 'today'})")
 
     return {"status": "done", "saved": saved, "tier_counts": {
         k: len(results.get(k, [])) for k in ["large", "mid", "small"]
@@ -79,12 +79,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--top-n", type=int, default=5)
     parser.add_argument("--session", default="evening", choices=["morning", "intraday", "evening"])
+    parser.add_argument("--date", default=None, help="YYYY-MM-DD (백필용, 미지정 시 오늘)")
     args = parser.parse_args()
 
     print("=" * 60)
-    print(f"🎯 일일 추천 종목 ({args.session})")
+    print(f"🎯 일일 추천 종목 ({args.session}) date={args.date or 'today'}")
     print("=" * 60)
-    result = run_daily_recommend(top_n=args.top_n, session=args.session)
+    result = run_daily_recommend(top_n=args.top_n, session=args.session, target_date=args.date)
     print("=" * 60)
     print(f"완료: {result}")
     print("=" * 60)

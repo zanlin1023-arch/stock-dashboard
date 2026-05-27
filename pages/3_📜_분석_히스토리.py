@@ -10,7 +10,7 @@ from common import init_page, get_db, nav_bar, sidebar_nav, render_macro_header
 from i18n import t
 
 st.set_page_config(page_title="분석 히스토리", page_icon="📜", layout="wide")
-init_page("분석 히스토리")
+init_page(t("history_title"))
 sidebar_nav()
 render_macro_header()
 nav_bar("history")
@@ -49,7 +49,7 @@ if db is None:
 # ──────────────────────────────────────────
 client = db.get_client()
 if not client:
-    st.error("DB 클라이언트 로드 실패")
+    st.error(t("history_db_client_fail"))
     st.stop()
 
 # 전체 데이터 조회
@@ -123,13 +123,15 @@ def _render_table(records: list[dict]):
         flow = raw.get("flow") or {}
         price_now = float(r.get("price") or 0)
 
+        _candle = t("hist_candle_unit")
+
         # 미래 1차 (첫 피크)
         future_1st = "-"
         if fp:
             p = fp[0]
             pct = (p.get("price", 0) / price_now - 1) * 100 if price_now else 0
             future_1st = (
-                f"+{p.get('cycle')}봉 · {p.get('label', '')} "
+                f"+{p.get('cycle')}{_candle} · {p.get('label', '')} "
                 f"{p.get('price', 0):,.0f} ({pct:+.1f}%)"
             )
 
@@ -139,7 +141,7 @@ def _render_table(records: list[dict]):
             p = fp[1]
             pct = (p.get("price", 0) / price_now - 1) * 100 if price_now else 0
             future_2nd = (
-                f"+{p.get('cycle')}봉 · {p.get('label', '')} "
+                f"+{p.get('cycle')}{_candle} · {p.get('label', '')} "
                 f"{p.get('price', 0):,.0f} ({pct:+.1f}%)"
             )
 
@@ -149,7 +151,7 @@ def _render_table(records: list[dict]):
             p = fp[2]
             pct = (p.get("price", 0) / price_now - 1) * 100 if price_now else 0
             future_3rd = (
-                f"+{p.get('cycle')}봉 · {p.get('label', '')} "
+                f"+{p.get('cycle')}{_candle} · {p.get('label', '')} "
                 f"{p.get('price', 0):,.0f} ({pct:+.1f}%)"
             )
 
@@ -157,20 +159,22 @@ def _render_table(records: list[dict]):
         flow_short = flow.get("verdict", "-") or "-"
 
         rows.append({
-            "분석시각 (KST)": _to_kst_str(r.get("analyzed_at", ""), with_label=False),
-            "종목": f"{r.get('stock_name', '')} ({r.get('stock_code', '')})",
-            "현재가": f"{r['price']:,.0f}" if r.get("price") else "-",
-            "RSI": f"{r['rsi_14']:.1f}" if r.get("rsi_14") else "-",
-            "구름": {
-                "above": "위 ↑", "below": "아래 ↓", "inside": "안 ↔",
+            t("hist_col_analyzed_at"): _to_kst_str(r.get("analyzed_at", ""), with_label=False),
+            t("hist_col_stock"): f"{r.get('stock_name', '')} ({r.get('stock_code', '')})",
+            t("hist_col_price"): f"{r['price']:,.0f}" if r.get("price") else "-",
+            t("hist_col_rsi"): f"{r['rsi_14']:.1f}" if r.get("rsi_14") else "-",
+            t("hist_col_cloud"): {
+                "above": t("hist_cloud_above"),
+                "below": t("hist_cloud_below"),
+                "inside": t("hist_cloud_inside"),
             }.get(r.get("cloud_position", ""), "-"),
-            "판단": r.get("decision_action", "-") or "-",
-            "🔺 1차 (피크)": future_1st,
-            "🔻 2차 (조정)": future_2nd,
-            "🔺 3차 (재상승)": future_3rd,
-            "💹 수급": flow_short,
-            "N목표": f"{r['target_n']:,.0f}" if r.get("target_n") else "-",
-            "손절": f"{r['stop_loss']:,.0f}" if r.get("stop_loss") else "-",
+            t("hist_col_decision"): r.get("decision_action", "-") or "-",
+            t("hist_col_future_1st"): future_1st,
+            t("hist_col_future_2nd"): future_2nd,
+            t("hist_col_future_3rd"): future_3rd,
+            t("hist_col_flow"): flow_short,
+            t("hist_col_target_n"): f"{r['target_n']:,.0f}" if r.get("target_n") else "-",
+            t("hist_col_stop"): f"{r['stop_loss']:,.0f}" if r.get("stop_loss") else "-",
         })
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
@@ -189,44 +193,52 @@ def _render_raw_data_expanders(records: list[dict], limit: int = 5):
         action = r.get("decision_action", "-") or "-"
 
         with st.expander(f"📅 {when_kst}  ·  {action}", expanded=False):
-            st.markdown("**📈 미래 추세 예측 (N파동 시나리오)**")
+            st.markdown(t("hist_future_path_header"))
             if fp:
                 has_any = True
                 for p in fp:
-                    role = "🔺 피크" if p.get("is_peak") else "🔻 조정"
+                    role = t("hist_future_peak") if p.get("is_peak") else t("hist_future_pullback")
                     pct = (p.get("price", 0) / float(r.get("price") or 1) - 1) * 100 if r.get("price") else 0
                     st.markdown(
-                        f"- {role} · **{p.get('label', '')}** "
-                        f"({p.get('cycle')}봉 후) → "
-                        f"**{p.get('price', 0):,.0f}원** ({pct:+.1f}%)"
+                        "- " + t(
+                            "hist_future_path_item",
+                            role=role,
+                            label=p.get("label", ""),
+                            cycle=p.get("cycle"),
+                            price=p.get("price", 0),
+                            pct=pct,
+                        )
                     )
             else:
-                st.caption("ℹ️ 미래 경로 데이터 없음")
+                st.caption(t("hist_future_no_data"))
 
-            st.markdown("**💹 외국인/기관 수급 (7일)**")
+            st.markdown(t("hist_flow_header"))
             if flow.get("verdict"):
                 has_any = True
-                st.markdown(f"- 종합: **{flow['verdict']}**")
+                st.markdown(f"- {t('hist_flow_summary')}: **{flow['verdict']}**")
                 for sig in (flow.get("signals") or [])[:3]:
                     st.caption(f"  · {sig}")
             else:
-                st.caption("ℹ️ 수급 데이터 없음")
+                st.caption(t("hist_flow_no_data"))
 
             future_cycles = [c for c in cycles_data if c.get("is_future")]
             if future_cycles:
                 has_any = True
-                st.markdown("**⏰ 다음 시간 변곡점 (일목 시간론)**")
+                st.markdown(t("hist_cycle_header"))
                 for c in future_cycles[:5]:
-                    st.caption(f"  · +{c.get('cycle')}봉 후")
+                    st.caption(t("hist_cycle_item", cycle=c.get("cycle")))
 
             if swings_data:
                 a, b, c = swings_data.get("A"), swings_data.get("B"), swings_data.get("C")
                 if a and b and c:
-                    st.markdown("**🔄 스윙 포인트**")
+                    st.markdown(t("hist_swing_header"))
                     st.caption(
-                        f"  A: {a.get('price', 0):,.0f} · "
-                        f"B: {b.get('price', 0):,.0f} · "
-                        f"C: {c.get('price', 0):,.0f}"
+                        t(
+                            "hist_swing_item",
+                            a=a.get("price", 0),
+                            b=b.get("price", 0),
+                            c=c.get("price", 0),
+                        )
                     )
 
             # 패턴 매칭 (키움 방식)
@@ -235,7 +247,7 @@ def _render_raw_data_expanders(records: list[dict], limit: int = 5):
             patterns_list = pm_data.get("patterns") or []
             if proj:
                 has_any = True
-                st.markdown("**🔍 패턴 매칭 (과거 유사 패턴 기반 미래 예측)**")
+                st.markdown(t("hist_pattern_header"))
                 pc = proj.get("pattern_count", 0)
                 avg_corr = proj.get("avg_correlation", 0)
                 avg_path = proj.get("avg_path") or []
@@ -247,27 +259,18 @@ def _render_raw_data_expanders(records: list[dict], limit: int = 5):
                     last_low = low_path[-1] if low_path else last_avg
                     last_high = high_path[-1] if high_path else last_avg
                     pct = (last_avg / price_now - 1) * 100
-                    st.markdown(
-                        f"- 유사 패턴 **{pc}개** (평균 상관계수 r={avg_corr})"
-                    )
-                    st.markdown(
-                        f"- 20봉 후 평균: **{last_avg:,.0f}원** ({pct:+.1f}%)"
-                    )
-                    st.caption(
-                        f"  · 보수(low): {last_low:,.0f} · 낙관(high): {last_high:,.0f}"
-                    )
+                    st.markdown("- " + t("hist_pattern_similar", pc=pc, r=avg_corr))
+                    st.markdown("- " + t("hist_pattern_avg", val=last_avg, pct=pct))
+                    st.caption(t("hist_pattern_lowhigh", low=last_low, high=last_high))
                 if patterns_list:
                     pattern_dates = " · ".join(
                         f"{p.get('start_date', '?')}~{p.get('end_date', '?')} (r={p.get('correlation')})"
                         for p in patterns_list[:3]
                     )
-                    st.caption(f"  · 매칭 구간: {pattern_dates}")
+                    st.caption(f"{t('hist_pattern_matched_periods')}: {pattern_dates}")
 
     if not has_any:
-        st.info(
-            "💡 future_path / flow / cycles 데이터는 코드 업데이트 (2026-05-26) 이후 "
-            "분석부터 raw_data에 저장됩니다."
-        )
+        st.info(t("hist_rawdata_note"))
 
 
 def _render_auto_section(records: list[dict], key_prefix: str,
@@ -311,13 +314,10 @@ def _render_auto_section(records: list[dict], key_prefix: str,
         # ⚠️ 차트와 raw_data 시점 mismatch 안내
         latest_analyzed = filtered[0].get("analyzed_at", "")
         latest_kst = _to_kst_str(latest_analyzed, with_label=False)
-        st.warning(
-            f"⚠️ **차트는 오늘 기준** · **raw_data는 분석 시점({latest_kst}) 기준** — "
-            f"미래 경로/사이클은 분석 당시 예측이라 현재 차트와 일치하지 않을 수 있음"
-        )
+        st.warning(t("hist_chart_mismatch_warn", when=latest_kst))
 
         # 일목 차트 (최신)
-        with st.spinner("🔍 최신 일목균형표 차트 생성 중..."):
+        with st.spinner(t("hist_chart_loading")):
             try:
                 import sys
                 from pathlib import Path
@@ -327,38 +327,44 @@ def _render_auto_section(records: list[dict], key_prefix: str,
                 if chart_path and chart_path.exists():
                     st.image(str(chart_path), use_container_width=True)
             except Exception as e:
-                st.error(f"⚠️ 차트 실패: {e}")
+                st.error(f"{t('hist_chart_fail')}: {e}")
 
         # 추이 차트 (2건 이상)
         if len(filtered) >= 2:
+            _tc_time = t("hist_trend_col_time")
+            _tc_price = t("hist_trend_col_price")
+            _tc_rsi = t("hist_trend_col_rsi")
+            _tc_target = t("hist_trend_col_target_n")
+            _tc_tenkan = t("hist_trend_col_tenkan")
+            _tc_kijun = t("hist_trend_col_kijun")
             trend_df = pd.DataFrame([
                 {
-                    "시각": r["analyzed_at"][:10],
-                    "현재가": float(r["price"]) if r.get("price") else None,
-                    "RSI": float(r["rsi_14"]) if r.get("rsi_14") else None,
-                    "N목표": float(r["target_n"]) if r.get("target_n") else None,
-                    "전환선": float(r["tenkan"]) if r.get("tenkan") else None,
-                    "기준선": float(r["kijun"]) if r.get("kijun") else None,
+                    _tc_time: r["analyzed_at"][:10],
+                    _tc_price: float(r["price"]) if r.get("price") else None,
+                    _tc_rsi: float(r["rsi_14"]) if r.get("rsi_14") else None,
+                    _tc_target: float(r["target_n"]) if r.get("target_n") else None,
+                    _tc_tenkan: float(r["tenkan"]) if r.get("tenkan") else None,
+                    _tc_kijun: float(r["kijun"]) if r.get("kijun") else None,
                 }
                 for r in filtered if r.get("price")
-            ]).sort_values("시각")
+            ]).sort_values(_tc_time)
             if not trend_df.empty:
-                tab1, tab2, tab3 = st.tabs(["💰 가격 + 목표가", "📊 RSI", "🌥 일목 5선"])
+                tab1, tab2, tab3 = st.tabs([t("hist_tab_price_target"), t("hist_tab_rsi"), t("hist_tab_ichimoku5")])
                 with tab1:
-                    st.line_chart(trend_df.set_index("시각")[["현재가", "N목표"]])
+                    st.line_chart(trend_df.set_index(_tc_time)[[_tc_price, _tc_target]])
                 with tab2:
-                    st.line_chart(trend_df.set_index("시각")["RSI"])
-                    st.caption("70+ 과매수 / 30- 과매도 / 50 중립")
+                    st.line_chart(trend_df.set_index(_tc_time)[_tc_rsi])
+                    st.caption(t("hist_rsi_caption"))
                 with tab3:
-                    if trend_df[["전환선", "기준선"]].notna().any().any():
-                        st.line_chart(trend_df.set_index("시각")[["현재가", "전환선", "기준선"]])
+                    if trend_df[[_tc_tenkan, _tc_kijun]].notna().any().any():
+                        st.line_chart(trend_df.set_index(_tc_time)[[_tc_price, _tc_tenkan, _tc_kijun]])
                     else:
-                        st.info("일목 데이터가 누적되면 표시")
+                        st.info(t("hist_ichimoku5_pending"))
         else:
-            st.info(f"💡 추이 차트는 같은 종목 자동 분석 2회 이상 누적되면 표시됩니다. 현재 {len(filtered)}건.")
+            st.info(t("hist_trend_need_more", n=len(filtered)))
 
         # raw_data 펼침
-        st.markdown("#### 🗂 일자별 누적 raw_data")
+        st.markdown(t("hist_raw_daily_title"))
         _render_raw_data_expanders(filtered, limit=10)
 
 
@@ -429,7 +435,7 @@ else:
             st.subheader(f"🔬 {sel_manual} {t('hist_manual_detail_title')}")
 
             # 일목 차트 (최신 시점 기준 실시간 생성)
-            with st.spinner("🔍 최신 일목균형표 차트 생성 중..."):
+            with st.spinner(t("hist_chart_loading")):
                 try:
                     import sys
                     from pathlib import Path
@@ -439,8 +445,8 @@ else:
                     if chart_path and chart_path.exists():
                         st.image(str(chart_path), use_container_width=True)
                 except Exception as e:
-                    st.error(f"⚠️ 차트 실패: {e}")
+                    st.error(f"{t('hist_chart_fail')}: {e}")
 
             # raw_data 펼침
-            st.markdown("#### 🗂 누적 분석 데이터 (DB raw_data)")
+            st.markdown(t("hist_raw_manual_title"))
             _render_raw_data_expanders(filtered_manual, limit=10)

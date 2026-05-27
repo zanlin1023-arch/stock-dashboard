@@ -199,12 +199,13 @@ def get_history(stock_code: str, limit: int = 30) -> list[dict]:
 # ───────────────────────────────────────────────────────
 # 추천 종목 (recommendations) — 날짜별 누적
 # ───────────────────────────────────────────────────────
-def save_recommendations(results: dict, session: str = "evening") -> int:
+def save_recommendations(results: dict, session: str = "evening", target_date: str | None = None) -> int:
     """recommend.recommend() 결과를 DB에 저장.
 
     Args:
         results: {"large": [...], "mid": [...], "small": [...]}
         session: 'morning' / 'intraday' / 'evening'
+        target_date: 'YYYY-MM-DD' (None이면 오늘)
 
     Returns:
         저장된 행 수
@@ -214,7 +215,7 @@ def save_recommendations(results: dict, session: str = "evening") -> int:
     if not client:
         return 0
 
-    today = _date.today().isoformat()
+    today = target_date or _date.today().isoformat()
     rows = []
     for tier in ["large", "mid", "small"]:
         for rank, stock in enumerate(results.get(tier, []), 1):

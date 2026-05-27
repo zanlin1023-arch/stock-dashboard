@@ -14,13 +14,13 @@ from common import init_page, get_db, sidebar_nav, render_macro_header, nav_bar
 from i18n import t
 
 st.set_page_config(page_title="공시·경제 캘린더", page_icon="📅", layout="wide")
-init_page("공시·경제 캘린더")
+init_page(t("calendar_title"))
 sidebar_nav()
 render_macro_header()
 nav_bar("calendar")
 
-st.title("📅 공시 · 경제 캘린더")
-st.caption("보유/관심 종목 공시 (OpenDART) + 주요 거시 일정")
+st.title(t("calendar_title"))
+st.caption(t("calendar_caption"))
 
 db = get_db()
 
@@ -31,12 +31,12 @@ db = get_db()
 c1, c2, c3 = st.columns([2, 2, 2])
 today = date.today()
 with c1:
-    start_date = st.date_input("시작일", value=today - timedelta(days=7))
+    start_date = st.date_input(t("calendar_start_date"), value=today - timedelta(days=7))
 with c2:
-    end_date = st.date_input("종료일", value=today + timedelta(days=7))
+    end_date = st.date_input(t("calendar_end_date"), value=today + timedelta(days=7))
 with c3:
-    show_macro = st.checkbox("거시 일정 포함", value=True)
-    show_only_my = st.checkbox("내 종목만 (보유+관심)", value=True)
+    show_macro = st.checkbox(t("calendar_include_macro"), value=True)
+    show_only_my = st.checkbox(t("calendar_only_my"), value=True)
 
 
 # ──────────────────────────────────────────
@@ -100,20 +100,20 @@ if db:
 # ──────────────────────────────────────────
 # 공시 조회
 # ──────────────────────────────────────────
-st.subheader("📰 종목 공시")
+st.subheader(t("calendar_disclosure_title"))
 
 if not my_codes:
-    st.info("💡 보유 또는 관심 종목을 먼저 등록하세요.")
+    st.info(t("calendar_need_register"))
 else:
     codes_tuple = tuple(c for c, _ in my_codes)
     bgn_de = start_date.strftime("%Y%m%d")
     end_de = end_date.strftime("%Y%m%d")
 
-    with st.spinner(f"{len(my_codes)}개 종목 공시 조회 중..."):
+    with st.spinner(t("calendar_loading_n", n=len(my_codes))):
         disclosures = _fetch_disclosures(codes_tuple, bgn_de, end_de)
 
     if not disclosures:
-        st.caption(f"📭 해당 기간 공시 없음 ({bgn_de} ~ {end_de})")
+        st.caption(f"{t('calendar_no_disclosure')} ({bgn_de} ~ {end_de})")
     else:
         # 날짜 역순 정렬
         disclosures.sort(key=lambda x: x.get("date", ""), reverse=True)
@@ -132,12 +132,12 @@ else:
             except Exception:
                 dt_label = dt
             expanded_flag = bool(dt_obj and dt_obj.date() >= today)
-            with st.expander(f"📅 {dt_label} — {len(items)}건", expanded=expanded_flag):
+            with st.expander(f"📅 {dt_label} — {len(items)}{t('calendar_disclosure_count')}", expanded=expanded_flag):
                 for d in items:
                     link = f"https://dart.fss.or.kr/dsaf001/main.do?rcpNo={d.get('rcept_no')}"
                     st.markdown(
                         f"- **[{d.get('corp_name', '')}]({link})** · {d.get('title', '')}  "
-                        f"<span style='color:#888;font-size:0.85rem;'>제출인: {d.get('filer', '-')}</span>",
+                        f"<span style='color:#888;font-size:0.85rem;'>{t('calendar_filer')}: {d.get('filer', '-')}</span>",
                         unsafe_allow_html=True,
                     )
 
@@ -147,22 +147,19 @@ else:
 # ──────────────────────────────────────────
 if show_macro:
     st.divider()
-    st.subheader("🌍 주요 거시 일정 (참고)")
-    st.caption("정기 일정 안내 — 정확한 일정은 한국은행/연준 공식 발표 확인")
+    st.subheader(t("calendar_macro_title"))
+    st.caption(t("calendar_macro_caption"))
 
     macro_events = [
-        ("매월 둘째주 목", "🏛 한국은행 금통위 (기준금리 결정)"),
-        ("매월 둘째주 목", "🇺🇸 FOMC 회의 (3·6·9·12월 분기 중)"),
-        ("매월 1·15일", "📊 KOSIS 주요 경제지표 발표"),
-        ("매주 금요일 21:30 KST", "🇺🇸 미국 비농업고용지표 (월 첫 금)"),
-        ("매주 목요일 21:30 KST", "🇺🇸 신규 실업수당 청구건수"),
-        ("매월 셋째주 목 21:30 KST", "🇺🇸 CPI 발표 (전월 데이터)"),
+        (t("calendar_macro_bok_when"), t("calendar_macro_bok_what")),
+        (t("calendar_macro_fomc_when"), t("calendar_macro_fomc_what")),
+        (t("calendar_macro_kosis_when"), t("calendar_macro_kosis_what")),
+        (t("calendar_macro_nfp_when"), t("calendar_macro_nfp_what")),
+        (t("calendar_macro_jobless_when"), t("calendar_macro_jobless_what")),
+        (t("calendar_macro_cpi_when"), t("calendar_macro_cpi_what")),
     ]
     for when, what in macro_events:
         st.markdown(f"- **{when}** — {what}")
 
 st.divider()
-st.caption(
-    "ℹ️ OpenDART 공시는 보유/관심 종목 한정. "
-    "전체 공시는 [DART](https://dart.fss.or.kr/) 직접 검색."
-)
+st.caption(t("calendar_footer"))

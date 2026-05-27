@@ -8,7 +8,7 @@ from common import init_page, get_db, nav_bar, sidebar_nav
 from i18n import t
 
 st.set_page_config(page_title="관심 종목", page_icon="⭐", layout="wide")
-init_page("관심 종목")
+init_page(t("watchlist_title"))
 sidebar_nav()
 nav_bar("watchlist")
 
@@ -48,9 +48,9 @@ with st.expander(t("watchlist_add"), expanded=False):
                 st.session_state["watch_auto_code"] = code
                 st.session_state["watch_auto_name"] = name
                 src_emoji = {"claude": "🤖", "openai": "🤖", "naver": "🌐", "fdr": "📊"}.get(info.get("source"), "📋")
-                st.success(f"{src_emoji} {name} ({code}) | 출처: {info.get('source')}")
+                st.success(f"{src_emoji} {name} ({code}) | {t('holdings_source')}: {info.get('source')}")
             except Exception as e:
-                st.error(f"자동 채우기 실패: {e}")
+                st.error(f"{t('holdings_autofill_fail')}: {e}")
 
     with st.form("add_watch"):
         note = st.text_input(
@@ -66,20 +66,20 @@ with st.expander(t("watchlist_add"), expanded=False):
         if submitted:
             target_query = query_outside.strip() or st.session_state.get("watch_auto_name", "")
             if not target_query:
-                st.warning("종목명을 입력하세요")
+                st.warning(t("holdings_input_name_required"))
             else:
                 try:
                     from _utils import resolve_ticker
                     code, name = resolve_ticker(target_query)
-                    tags = [t.strip() for t in tags_input.split(",") if t.strip()]
+                    tags = [tg.strip() for tg in tags_input.split(",") if tg.strip()]
                     db.add_watch(code, name, note, tags)
                     # 자동 채우기 세션 정리
                     for k in ["watch_auto_memo", "watch_auto_tags", "watch_auto_code", "watch_auto_name"]:
                         st.session_state.pop(k, None)
-                    st.success(f"✅ {name} ({code}) 추가됨")
+                    st.success(f"✅ {name} ({code}) {t('watchlist_added')}")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ 추가 실패: {e}")
+                    st.error(f"❌ {t('watchlist_add_fail')}: {e}")
 
 
 # ──────────────────────────────────────────
@@ -111,16 +111,22 @@ def _fetch_current(code: str):
 
 
 rows = []
+_wcol_stock = t("watchlist_col_stock")
+_wcol_cur = t("watchlist_col_cur")
+_wcol_prev = t("watchlist_col_prev")
+_wcol_tags = t("watchlist_col_tags")
+_wcol_note = t("watchlist_col_note")
+_wcol_added = t("watchlist_col_added")
 for w in watchlist:
     cur, chg = _fetch_current(w["stock_code"])
     rows.append({
         "id": w["id"],
-        "종목": f"{w['stock_name']} ({w['stock_code']})",
-        "현재가": f"{cur:,.0f}" if cur else "-",
-        "전일대비": f"{chg:+.2f}%" if chg is not None else "-",
-        "태그": ", ".join(w.get("tags") or []) or "-",
-        "메모": w.get("note", "") or "-",
-        "추가일": w.get("added_at", "")[:10] if w.get("added_at") else "-",
+        _wcol_stock: f"{w['stock_name']} ({w['stock_code']})",
+        _wcol_cur: f"{cur:,.0f}" if cur else "-",
+        _wcol_prev: f"{chg:+.2f}%" if chg is not None else "-",
+        _wcol_tags: ", ".join(w.get("tags") or []) or "-",
+        _wcol_note: w.get("note", "") or "-",
+        _wcol_added: w.get("added_at", "")[:10] if w.get("added_at") else "-",
     })
 
 
@@ -132,23 +138,23 @@ for i in range(0, len(rows), 2):
     for j, r in enumerate(rows[i:i + 2]):
         with cols[j]:
             with st.container(border=True):
-                st.markdown(f"**{r['종목']}**")
+                st.markdown(f"**{r[_wcol_stock]}**")
                 mc1, mc2 = st.columns(2)
                 with mc1:
-                    st.metric(t("current_price"), r["현재가"], r["전일대비"] if r["전일대비"] != "-" else None)
+                    st.metric(t("current_price"), r[_wcol_cur], r[_wcol_prev] if r[_wcol_prev] != "-" else None)
                 with mc2:
-                    if r["태그"] != "-":
-                        st.caption(f"🏷 {r['태그']}")
-                    if r["메모"] != "-":
-                        st.caption(f"💬 {r['메모']}")
+                    if r[_wcol_tags] != "-":
+                        st.caption(f"🏷 {r[_wcol_tags]}")
+                    if r[_wcol_note] != "-":
+                        st.caption(f"💬 {r[_wcol_note]}")
 
                 bc1, bc2 = st.columns(2)
                 with bc1:
-                    if st.button(f"🔬 {t('detail_analysis')}", key=f"w_ana_{r['id']}", use_container_width=True):
-                        st.session_state["last_query"] = r["종목"].split(" (")[1].rstrip(")")
+                    if st.button(t("detail_analysis"), key=f"w_ana_{r['id']}", use_container_width=True):
+                        st.session_state["last_query"] = r[_wcol_stock].split(" (")[1].rstrip(")")
                         st.switch_page("pages/5_🔬_종목_분석.py")
                 with bc2:
-                    if st.button(f"🗑 {t('btn_delete')}", key=f"w_del_{r['id']}", use_container_width=True):
+                    if st.button(t("btn_delete"), key=f"w_del_{r['id']}", use_container_width=True):
                         try:
                             db.delete_watch(r["id"])
                             st.success(t("delete_done"))
@@ -159,6 +165,6 @@ for i in range(0, len(rows), 2):
 st.divider()
 
 # 표 형식도 같이 (한눈에 비교용)
-with st.expander(f"📊 {t('watchlist_list')} (표 보기)"):
+with st.expander(t("watchlist_table_view")):
     df_display = pd.DataFrame(rows).drop(columns=["id"])
     st.dataframe(df_display, use_container_width=True, hide_index=True)

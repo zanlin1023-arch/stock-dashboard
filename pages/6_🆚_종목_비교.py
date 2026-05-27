@@ -4,15 +4,13 @@ from __future__ import annotations
 import streamlit as st
 
 from common import init_page, sidebar_nav
+from i18n import t
 
 st.set_page_config(page_title="종목 비교 (이동됨)", page_icon="🆚", layout="wide")
-init_page("종목 비교")
+init_page(t("compare_title"))
 sidebar_nav()
 
-st.title("🆚 종목 비교")
-st.info(
-    "이 기능은 **🎯 추천 종목** 페이지 각 카드 내부의 "
-    "**🏢 섹터 · 관련주 비교** expander로 통합되었습니다."
-)
-if st.button("🎯 추천 종목으로 이동", type="primary"):
+st.title(t("compare_title"))
+st.info(t("compare_moved_info"))
+if st.button(t("compare_goto_recommend"), type="primary"):
     st.switch_page("pages/4_🎯_추천_종목.py")

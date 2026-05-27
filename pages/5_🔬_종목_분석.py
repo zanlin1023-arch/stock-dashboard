@@ -13,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-init_page("종목 분석")
+init_page(t("analyze_page_title"))
 sidebar_nav()
 render_macro_header()
 nav_bar("analyze")
@@ -208,7 +208,7 @@ if analyze_btn and query:
 
     # ───── 동종업종 비교 위젯 ─────
     st.divider()
-    st.subheader("🏢 동종업종 비교")
+    st.subheader(t("analyze_sector_compare"))
 
     @st.cache_data(ttl=600, show_spinner=False)
     def _sector_data(stock_code: str) -> dict:
@@ -218,22 +218,26 @@ if analyze_btn and query:
         except Exception:
             return {"sector_no": None, "sector_name": "", "peers": [], "self_in_peers": False}
 
-    with st.spinner("동종업종 종목 조회 중..."):
+    with st.spinner(t("analyze_sector_loading")):
         sec = _sector_data(code)
 
     if sec.get("peers"):
-        sector_label = sec.get("sector_name") or "동종업종"
-        st.caption(f"📂 **{sector_label}** · 상위 {len(sec['peers'])}개 종목")
+        sector_label = sec.get("sector_name") or t("analyze_sector_default_label")
+        st.caption(t("analyze_sector_top", label=sector_label, n=len(sec["peers"])))
 
         import pandas as pd
+        _sc_compare = t("analyze_sector_col_compare")
+        _sc_stock = t("analyze_sector_col_stock")
+        _sc_price = t("analyze_sector_col_price")
+        _sc_change = t("analyze_sector_col_change")
         rows = []
         for p in sec["peers"]:
             is_self = p["code"] == code
             rows.append({
-                "비교": "👈 본인" if is_self else "",
-                "종목": f"{p['name']} ({p['code']})",
-                "현재가": f"{int(p['price']):,}" if p['price'] else "-",
-                "등락률": f"{p['change_pct']:+.2f}%",
+                _sc_compare: t("analyze_sector_self") if is_self else "",
+                _sc_stock: f"{p['name']} ({p['code']})",
+                _sc_price: f"{int(p['price']):,}" if p['price'] else "-",
+                _sc_change: f"{p['change_pct']:+.2f}%",
             })
         df_sec = pd.DataFrame(rows)
         st.dataframe(df_sec, use_container_width=True, hide_index=True)
@@ -243,13 +247,12 @@ if analyze_btn and query:
         st.markdown(
             f"<div style='padding:8px 12px;border-radius:6px;background:{sec_color}10;"
             f"border-left:3px solid {sec_color};font-size:0.9rem;'>"
-            f"📊 섹터 평균 등락률: <strong style='color:{sec_color};'>{avg_chg:+.2f}%</strong> · "
-            f"본인 등락률: <strong>{(result.get('daily_return') or 0):+.2f}%</strong>"
-            f"</div>",
+            + t("analyze_sector_summary", color=sec_color, avg=avg_chg, own=(result.get("daily_return") or 0))
+            + "</div>",
             unsafe_allow_html=True,
         )
     else:
-        st.caption("ℹ️ 동종업종 데이터를 가져올 수 없습니다.")
+        st.caption(t("analyze_sector_unavailable"))
 
     # DB 저장
     if save_to_db and _db_available and db is not None:
@@ -298,7 +301,7 @@ if analyze_btn and query:
             if saved:
                 st.success(f"{t('db_save_done')} (id: {saved.get('id')})")
         except Exception as e:
-            st.warning(f"⚠️ {e}")
+            st.warning(f"{t('analyze_db_save_warn')}: {e}")
 
     # 관심종목 추가 버튼
     if _db_available and db is not None:
@@ -318,31 +321,35 @@ if analyze_btn and query:
 
     # 이동평균 표
     with st.expander(t("moving_averages")):
+        _won = t("analyze_won_suffix")
         ma_data = {
-            "기간": ["5일선", "20일선", "60일선", "120일선"],
-            "값": [
-                f"{result['sma_5']:,.0f}원" if result["sma_5"] else "-",
-                f"{result['sma_20']:,.0f}원" if result["sma_20"] else "-",
-                f"{result['sma_60']:,.0f}원" if result["sma_60"] else "-",
-                f"{result['sma_120']:,.0f}원" if result["sma_120"] else "-",
+            t("analyze_ma_period"): [t("analyze_ma_5"), t("analyze_ma_20"), t("analyze_ma_60"), t("analyze_ma_120")],
+            t("analyze_ma_value"): [
+                f"{result['sma_5']:,.0f}{_won}" if result["sma_5"] else "-",
+                f"{result['sma_20']:,.0f}{_won}" if result["sma_20"] else "-",
+                f"{result['sma_60']:,.0f}{_won}" if result["sma_60"] else "-",
+                f"{result['sma_120']:,.0f}{_won}" if result["sma_120"] else "-",
             ],
         }
         st.table(ma_data)
 
     # 파동 정보
     with st.expander(t("ichimoku_wave")):
+        c_formed_txt = t("analyze_wave_c_formed") if swings.get("c_formed") else t("analyze_wave_c_not_formed")
         st.markdown(
-            f"""
-            - **A (시작 저점)**: {swings['A']['price']:,.0f}원 ({swings['A']['date'].strftime('%Y-%m-%d')})
-            - **B (고점)**: {swings['B']['price']:,.0f}원 ({swings['B']['date'].strftime('%Y-%m-%d')})
-            - **C (조정 저점)**: {swings['C']['price']:,.0f}원 ({swings['C']['date'].strftime('%Y-%m-%d')})
-            - **C 형성 여부**: {'✅ 형성' if swings.get('c_formed') else '⚠️ 미형성 (신규 추세 진행 중)'}
-
-            **파동론 공식**:
-            - V = B + (B − C) = {targets['V']:,.0f}
-            - N = C + (B − A) = {targets['N']:,.0f}
-            - E = B + (B − A) = {targets['E']:,.0f}
-            """
+            t(
+                "analyze_wave_body",
+                a_price=swings["A"]["price"],
+                a_date=swings["A"]["date"].strftime("%Y-%m-%d"),
+                b_price=swings["B"]["price"],
+                b_date=swings["B"]["date"].strftime("%Y-%m-%d"),
+                c_price=swings["C"]["price"],
+                c_date=swings["C"]["date"].strftime("%Y-%m-%d"),
+                c_formed=c_formed_txt,
+                v=targets["V"],
+                n=targets["N"],
+                e=targets["E"],
+            )
         )
 
 else:
