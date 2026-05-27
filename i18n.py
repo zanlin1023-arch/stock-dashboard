@@ -776,15 +776,46 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
 # ──────────────────────────────────────────
 # API
 # ──────────────────────────────────────────
+# URL query param 별칭 (?lang=kr 또는 ?lang=tw)
+_LANG_ALIASES = {
+    "kr": "ko", "ko": "ko", "ko-KR": "ko", "ko_KR": "ko",
+    "tw": "zh-TW", "zh-tw": "zh-TW", "zh-TW": "zh-TW", "zh_TW": "zh-TW",
+    "zh-Hant": "zh-TW", "tc": "zh-TW",
+}
+
+
+def _lang_to_alias(lang: str) -> str:
+    """내부 lang 코드 → URL alias (ko → kr, zh-TW → tw)."""
+    return {"ko": "kr", "zh-TW": "tw"}.get(lang, lang)
+
+
 def get_lang() -> str:
-    """현재 선택된 언어 (session_state에서 가져옴)."""
+    """현재 선택된 언어. 우선순위: URL query → session_state → DEFAULT."""
+    # URL query param 우선
+    try:
+        qp = st.query_params.get("lang")
+        if qp:
+            resolved = _LANG_ALIASES.get(qp) or _LANG_ALIASES.get(qp.lower())
+            if resolved and resolved in SUPPORTED_LANGS:
+                # session_state 동기화 (이후 변경 추적용)
+                if st.session_state.get("lang") != resolved:
+                    st.session_state["lang"] = resolved
+                return resolved
+    except Exception:
+        pass
     return st.session_state.get("lang", DEFAULT_LANG)
 
 
 def set_lang(lang: str) -> None:
-    """언어 설정 (session_state에 저장)."""
-    if lang in SUPPORTED_LANGS:
-        st.session_state["lang"] = lang
+    """언어 설정 (session_state 저장 + URL query 동기화)."""
+    if lang not in SUPPORTED_LANGS:
+        return
+    st.session_state["lang"] = lang
+    # URL query param 동기화
+    try:
+        st.query_params["lang"] = _lang_to_alias(lang)
+    except Exception:
+        pass
 
 
 def t(key: str, **kwargs) -> str:

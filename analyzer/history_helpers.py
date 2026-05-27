@@ -220,15 +220,27 @@ def _render_auto_section(records: list[dict], key_prefix: str,
         st.info(empty_msg)
         return
 
-    # 종목 필터
+    # 종목 + 날짜 필터
     codes_x = sorted({(r["stock_code"], r["stock_name"]) for r in records}, key=lambda x: x[1])
+    dates_x = sorted(
+        {r.get("analyzed_date") for r in records if r.get("analyzed_date")},
+        reverse=True,
+    )
     options_x = [t("filter_all")] + [f"{name} ({code})" for code, name in codes_x]
-    sel_x = st.selectbox(t("filter_stock"), options_x, key=f"hist_{key_prefix}_stock")
+    options_d = [t("filter_all")] + list(dates_x)
+
+    fc1, fc2 = st.columns(2)
+    with fc1:
+        sel_x = st.selectbox(t("filter_stock"), options_x, key=f"hist_{key_prefix}_stock")
+    with fc2:
+        sel_d = st.selectbox(t("filter_date"), options_d, key=f"hist_{key_prefix}_date")
 
     filtered = records
     if sel_x != t("filter_all"):
         sel_code_x = sel_x.split("(")[-1].rstrip(")")
         filtered = [r for r in filtered if r["stock_code"] == sel_code_x]
+    if sel_d != t("filter_all"):
+        filtered = [r for r in filtered if r.get("analyzed_date") == sel_d]
 
     # 통계
     unique_codes = {r["stock_code"] for r in filtered}
@@ -315,13 +327,25 @@ def _render_manual_section(manual_records: list[dict]):
         return
 
     codes_manual = sorted({(r["stock_code"], r["stock_name"]) for r in manual_records}, key=lambda x: x[1])
+    dates_manual = sorted(
+        {r.get("analyzed_date") for r in manual_records if r.get("analyzed_date")},
+        reverse=True,
+    )
     options_manual = [t("filter_all")] + [f"{name} ({code})" for code, name in codes_manual]
-    sel_manual = st.selectbox(t("filter_stock"), options_manual, key="hist_manual_stock")
+    options_dm = [t("filter_all")] + list(dates_manual)
+
+    mc1, mc2 = st.columns(2)
+    with mc1:
+        sel_manual = st.selectbox(t("filter_stock"), options_manual, key="hist_manual_stock")
+    with mc2:
+        sel_dm = st.selectbox(t("filter_date"), options_dm, key="hist_manual_date")
 
     filtered_manual = manual_records
     if sel_manual != t("filter_all"):
         sel_code_m = sel_manual.split("(")[-1].rstrip(")")
         filtered_manual = [r for r in filtered_manual if r["stock_code"] == sel_code_m]
+    if sel_dm != t("filter_all"):
+        filtered_manual = [r for r in filtered_manual if r.get("analyzed_date") == sel_dm]
 
     # 통계 — 수동은 판단 분포가 의미 있음
     stances = [r.get("decision_stance") for r in filtered_manual if r.get("decision_stance")]
