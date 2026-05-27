@@ -105,6 +105,23 @@ def _render_table(records: list[dict]):
             pct = (float(val) / price_now - 1) * 100 if price_now else 0
             return f"{float(val):,.0f} ({pct:+.1f}%)"
 
+        # 패턴 매칭 시점별 예측 가격 (raw_data.pattern_match.projection)
+        pm_data = raw.get("pattern_match") or {}
+        proj = pm_data.get("projection") or {}
+        pm_days = proj.get("days") or []
+        pm_avg = proj.get("avg_path") or []
+
+        def _fmt_pattern(target_day: int) -> str:
+            """target_day(예: 5/10/15/20봉) 시점의 패턴 매칭 평균 예측가."""
+            for i, d in enumerate(pm_days):
+                if d == target_day and i < len(pm_avg):
+                    price = float(pm_avg[i])
+                    date_str = _cycle_to_date(analyzed_at_iso, target_day)
+                    date_prefix = f"📅 {date_str} · " if date_str else ""
+                    pct = (price / price_now - 1) * 100 if price_now else 0
+                    return f"{date_prefix}{price:,.0f} ({pct:+.1f}%)"
+            return "-"
+
         # 일목 가격 그룹 (V/N/E) → 일목 시간 사이클 그룹 (1차/2차/3차) 인접 배치
         rows.append({
             t("hist_col_analyzed_at"): _to_kst_str(r.get("analyzed_at", ""), with_label=False),
@@ -117,11 +134,12 @@ def _render_table(records: list[dict]):
                 "inside": t("hist_cloud_inside"),
             }.get(r.get("cloud_position", ""), "-"),
             t("hist_col_decision"): r.get("decision_action", "-") or "-",
-            # 일목 가격 (시간 무관 목표가)
-            t("hist_col_target_v"): _fmt_target(r.get("target_v")),
-            t("hist_col_target_n"): _fmt_target(r.get("target_n")),
-            t("hist_col_target_e"): _fmt_target(r.get("target_e")),
-            # 일목 시간 사이클 (V/N/E를 시간에 매핑)
+            # 🔬 패턴 매칭 시점별 예측 가격 (실데이터 기반 — 일목 V/N/E 공식 대체)
+            t("hist_col_pattern_5d"): _fmt_pattern(5),
+            t("hist_col_pattern_10d"): _fmt_pattern(10),
+            t("hist_col_pattern_15d"): _fmt_pattern(15),
+            t("hist_col_pattern_20d"): _fmt_pattern(20),
+            # 일목 시간 사이클 (참고용)
             t("hist_col_future_1st"): future_1st,
             t("hist_col_future_2nd"): future_2nd,
             t("hist_col_future_3rd"): future_3rd,
