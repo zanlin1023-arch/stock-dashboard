@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import os
+import tempfile
 import zipfile
 from pathlib import Path
 import xml.etree.ElementTree as ET
@@ -17,13 +18,21 @@ import streamlit as st
 
 
 DART_BASE = "https://opendart.fss.or.kr/api"
-CACHE_DIR = Path(__file__).parent / ".cache"
-CACHE_DIR.mkdir(exist_ok=True)
+# Streamlit Cloud sandbox에서도 쓰기 가능한 임시 디렉토리 사용
+CACHE_DIR = Path(tempfile.gettempdir()) / "stock_dashboard_dart_cache"
+CACHE_DIR.mkdir(exist_ok=True, parents=True)
 CORP_CODE_FILE = CACHE_DIR / "corp_code.xml"
 
 
 def _get_api_key() -> str:
-    return os.getenv("OPENDART_API_KEY", "")
+    """OPENDART_API_KEY: env → st.secrets 순서로 폴백."""
+    key = os.getenv("OPENDART_API_KEY", "")
+    if not key:
+        try:
+            key = st.secrets.get("OPENDART_API_KEY", "") if hasattr(st, "secrets") else ""
+        except Exception:
+            key = ""
+    return key
 
 
 @st.cache_data(ttl=604800, show_spinner=False)  # 1주일 캐시
