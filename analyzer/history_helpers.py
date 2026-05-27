@@ -33,6 +33,37 @@ def _to_kst_str(utc_iso: str, with_label: bool = True) -> str:
         return utc_iso[:19].replace("T", " ")
 
 
+def _add_business_days(start_date, days: int):
+    """주말 제외하고 영업일 더하기 (한국 공휴일은 미반영, 근사치)."""
+    d = start_date
+    added = 0
+    while added < days:
+        d = d + timedelta(days=1)
+        if d.weekday() < 5:  # 0=월~4=금
+            added += 1
+    return d
+
+
+def _cycle_to_date(utc_iso: str, cycle) -> str:
+    """분석 시점(UTC ISO) + cycle 영업일 → 'MM/DD' (KST 기준).
+
+    cycle 없거나 변환 실패 시 빈 string.
+    """
+    try:
+        c = int(cycle or 0)
+        if c <= 0:
+            return ""
+        s = (utc_iso or "").replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        base = dt.astimezone(KST).date()
+        target = _add_business_days(base, c)
+        return f"{target.month}/{target.day}"
+    except Exception:
+        return ""
+
+
 def _render_table(records: list[dict]):
     """공통 테이블 렌더 — 미래 경로(future_path) + 수급(flow) 컬럼 포함."""
     rows = []
@@ -44,36 +75,20 @@ def _render_table(records: list[dict]):
         price_now = float(r.get("price") or 0)
 
         _candle = t("hist_candle_unit")
+        analyzed_at_iso = r.get("analyzed_at", "")
 
-        # 미래 1차 (첫 피크)
-        future_1st = "-"
-        if fp:
-            p = fp[0]
+        def _fmt_future(p: dict) -> str:
             pct = (p.get("price", 0) / price_now - 1) * 100 if price_now else 0
-            future_1st = (
-                f"+{p.get('cycle')}{_candle} · {p.get('label', '')} "
+            date_str = _cycle_to_date(analyzed_at_iso, p.get("cycle"))
+            date_prefix = f"📅 {date_str} · " if date_str else ""
+            return (
+                f"{date_prefix}+{p.get('cycle')}{_candle} · {p.get('label', '')} "
                 f"{p.get('price', 0):,.0f} ({pct:+.1f}%)"
             )
 
-        # 미래 2차 (조정)
-        future_2nd = "-"
-        if len(fp) >= 2:
-            p = fp[1]
-            pct = (p.get("price", 0) / price_now - 1) * 100 if price_now else 0
-            future_2nd = (
-                f"+{p.get('cycle')}{_candle} · {p.get('label', '')} "
-                f"{p.get('price', 0):,.0f} ({pct:+.1f}%)"
-            )
-
-        # 미래 3차 (재상승)
-        future_3rd = "-"
-        if len(fp) >= 3:
-            p = fp[2]
-            pct = (p.get("price", 0) / price_now - 1) * 100 if price_now else 0
-            future_3rd = (
-                f"+{p.get('cycle')}{_candle} · {p.get('label', '')} "
-                f"{p.get('price', 0):,.0f} ({pct:+.1f}%)"
-            )
+        future_1st = _fmt_future(fp[0]) if fp else "-"
+        future_2nd = _fmt_future(fp[1]) if len(fp) >= 2 else "-"
+        future_3rd = _fmt_future(fp[2]) if len(fp) >= 3 else "-"
 
         # 수급 verdict (짧게)
         flow_short = flow.get("verdict", "-") or "-"
@@ -116,11 +131,14 @@ def _render_raw_data_expanders(records: list[dict], limit: int = 5):
             st.markdown(t("hist_future_path_header"))
             if fp:
                 has_any = True
+                analyzed_iso = r.get("analyzed_at", "")
                 for p in fp:
                     role = t("hist_future_peak") if p.get("is_peak") else t("hist_future_pullback")
                     pct = (p.get("price", 0) / float(r.get("price") or 1) - 1) * 100 if r.get("price") else 0
+                    target_date = _cycle_to_date(analyzed_iso, p.get("cycle"))
+                    date_prefix = f"📅 **{target_date}** · " if target_date else ""
                     st.markdown(
-                        "- " + t(
+                        "- " + date_prefix + t(
                             "hist_future_path_item",
                             role=role,
                             label=p.get("label", ""),
