@@ -178,30 +178,38 @@ def sidebar_nav():
         )
 
         st.markdown(f"### {t('menu')}")
-        st.page_link("app.py", label=t("nav_dashboard"), icon=None)
-        st.page_link("pages/5_🔬_종목_분석.py", label=t("nav_analyze"))
 
-        # 🎯 추천 종목 + sub-nav (세션별 3개)
+        def _safe_page_link(path: str, label: str):
+            """Cloud 배포 race condition 방어 — 페이지 못 찾으면 스킵."""
+            try:
+                st.page_link(path, label=label)
+            except Exception:
+                pass
+
+        _safe_page_link("app.py", t("nav_dashboard"))
+        _safe_page_link("pages/5_🔬_종목_분석.py", t("nav_analyze"))
+
+        # 🎯 추천 종목 + sub-nav (세션별)
         st.markdown(f"**{t('nav_recommend')}**")
         st.markdown('<div class="subnav-wrap">', unsafe_allow_html=True)
-        st.page_link("pages/4a_🌅_morning_추천.py", label=t("nav_rec_morning"))
-        st.page_link("pages/4c_🌙_evening_추천.py", label=t("nav_rec_evening"))
+        _safe_page_link("pages/4a_🌅_morning_추천.py", t("nav_rec_morning"))
+        _safe_page_link("pages/4c_🌙_evening_추천.py", t("nav_rec_evening"))
         st.markdown('</div>', unsafe_allow_html=True)
 
-        st.page_link("pages/1_💼_보유_종목.py", label=t("nav_holdings"))
-        st.page_link("pages/2_⭐_관심_종목.py", label=t("nav_watchlist"))
+        _safe_page_link("pages/1_💼_보유_종목.py", t("nav_holdings"))
+        _safe_page_link("pages/2_⭐_관심_종목.py", t("nav_watchlist"))
 
         # 📜 분석 히스토리 + sub-nav (카테고리 3개)
         st.markdown(f"**{t('nav_history')}**")
         st.markdown('<div class="subnav-wrap">', unsafe_allow_html=True)
-        st.page_link("pages/3a_💼_자동_보유_히스토리.py", label=t("nav_hist_auto_hold"))
-        st.page_link("pages/3b_⭐_자동_관심_히스토리.py", label=t("nav_hist_auto_watch"))
-        st.page_link("pages/3c_👤_수동_분석_히스토리.py", label=t("nav_hist_manual"))
+        _safe_page_link("pages/3a_💼_자동_보유_히스토리.py", t("nav_hist_auto_hold"))
+        _safe_page_link("pages/3b_⭐_자동_관심_히스토리.py", t("nav_hist_auto_watch"))
+        _safe_page_link("pages/3c_👤_수동_분석_히스토리.py", t("nav_hist_manual"))
         st.markdown('</div>', unsafe_allow_html=True)
 
         # 종목 비교는 추천 종목 카드 내부에 통합되어 별도 메뉴 제거
-        st.page_link("pages/7_📅_캘린더.py", label=t("nav_calendar"))
-        st.page_link("pages/8_🌡️_시장_히트맵.py", label=t("nav_heatmap"))
+        _safe_page_link("pages/7_📅_캘린더.py", t("nav_calendar"))
+        _safe_page_link("pages/8_🌡️_시장_히트맵.py", t("nav_heatmap"))
         st.divider()
 
 
