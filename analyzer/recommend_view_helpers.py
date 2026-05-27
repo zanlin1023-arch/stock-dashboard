@@ -55,6 +55,137 @@ def to_kst_str(s: str) -> str:
 
 
 # ──────────────────────────────────────────
+# 단타 / 장기 관점 분류
+# ──────────────────────────────────────────
+# 단기 모멘텀 시그널 키워드 (단타)
+_SHORT_KW = (
+    "폭등", "거래량", "신고가", "RSI 강세", "ADX 강한", "ADX 매우 강한",
+    "동행성", "5일 +", "5일 폭등",
+)
+# 추세 형성 시그널 키워드 (장기)
+_LONG_KW = (
+    "정배열", "MACD 골든", "MACD 상승", "동반 매수", "연속 순매수", "연속 매수",
+    "매수 전환", "60일 신고가", "RSI 양호", "RSI 강세 (>50)",
+)
+
+
+def classify_horizon(signals: list, change_pct=None) -> tuple[str, int, int]:
+    """시그널 + 등락률 기반으로 단타/장기 관점 분류.
+
+    Returns:
+        (라벨 키, short_score, long_score)
+        라벨 키: rec_horizon_short / rec_horizon_long / rec_horizon_both / rec_horizon_neutral
+    """
+    short_score = 0
+    long_score = 0
+    for s in signals or []:
+        s = str(s)
+        for kw in _SHORT_KW:
+            if kw in s:
+                short_score += 1
+        for kw in _LONG_KW:
+            if kw in s:
+                long_score += 1
+    # 등락률 큰 (>5%) 종목은 단타 가중
+    try:
+        chg = float(change_pct) if change_pct is not None else 0
+        if abs(chg) >= 5:
+            short_score += 2
+        elif abs(chg) >= 3:
+            short_score += 1
+    except (TypeError, ValueError):
+        pass
+
+    # 분류 임계값
+    s_strong = short_score >= 3
+    l_strong = long_score >= 3
+    if s_strong and l_strong:
+        return ("rec_horizon_both", short_score, long_score)
+    if s_strong:
+        return ("rec_horizon_short", short_score, long_score)
+    if l_strong:
+        return ("rec_horizon_long", short_score, long_score)
+    # 약한 시그널 — 더 큰 쪽
+    if short_score > long_score and short_score >= 1:
+        return ("rec_horizon_short", short_score, long_score)
+    if long_score > short_score and long_score >= 1:
+        return ("rec_horizon_long", short_score, long_score)
+    return ("rec_horizon_neutral", short_score, long_score)
+
+
+# ──────────────────────────────────────────
+# 강세 테마 집계
+# ──────────────────────────────────────────
+def compute_hot_themes(recs: list[dict], top_n: int = 5) -> list[dict]:
+    """추천 종목들의 sector_name 집계 → 강세 테마 상위 N개.
+
+    Returns:
+        [{"theme": str, "count": int, "avg_change": float, "stocks": [name, ...]}, ...]
+    """
+    from collections import defaultdict
+    bucket: dict[str, dict] = defaultdict(lambda: {"changes": [], "stocks": []})
+    for r in recs:
+        # 페이지에서 sector_name이 별도 컬럼 없으면 _peer_data로 가져와야 함
+        code = r.get("stock_code")
+        if not code:
+            continue
+        sector_name = _peer_data(code, max_peers=1).get("sector_name") or ""
+        if not sector_name:
+            continue
+        try:
+            chg = float(r.get("change_pct") or 0)
+        except (TypeError, ValueError):
+            chg = 0
+        bucket[sector_name]["changes"].append(chg)
+        bucket[sector_name]["stocks"].append(r.get("stock_name", "?"))
+    items = []
+    for theme, info in bucket.items():
+        n = len(info["changes"])
+        avg = sum(info["changes"]) / n if n else 0
+        items.append({
+            "theme": theme,
+            "count": n,
+            "avg_change": avg,
+            "stocks": info["stocks"],
+        })
+    # 등장 종목 수 우선, 같으면 평균 등락률
+    items.sort(key=lambda x: (-x["count"], -x["avg_change"]))
+    return items[:top_n]
+
+
+def render_hot_themes(recs: list[dict]):
+    """상단 강세 테마 박스."""
+    themes = compute_hot_themes(recs, top_n=5)
+    if not themes:
+        st.caption(t("rec_hot_themes_empty"))
+        return
+    chip_html = []
+    for th in themes:
+        avg = th["avg_change"]
+        color = "#E74C3C" if avg > 0 else ("#1F77D4" if avg < 0 else "#7F8C8D")
+        stocks_preview = " · ".join(th["stocks"][:3])
+        chip_html.append(
+            f"<span style='display:inline-block;margin:3px 4px;padding:6px 12px;"
+            f"background:{color}15;border:1px solid {color}40;border-radius:14px;"
+            f"font-size:0.82rem;color:#333;'>"
+            f"<strong style='color:{color};'>{th['theme']}</strong> "
+            f"<span style='color:#777;font-size:0.75rem;'>{th['count']}{t('rec_hot_themes_stocks')} · "
+            f"{t('rec_hot_themes_avg')} <strong style='color:{color};'>{avg:+.2f}%</strong></span>"
+            f"<div style='font-size:0.7rem;color:#999;margin-top:2px;'>{stocks_preview}</div>"
+            f"</span>"
+        )
+    st.markdown(
+        f"<div style='padding:12px 14px;background:#FFF9E6;border-left:4px solid #F1C40F;"
+        f"border-radius:8px;margin:8px 0;'>"
+        f"<div style='font-weight:700;color:#7A5C00;margin-bottom:6px;'>"
+        f"{t('rec_hot_themes_title')}</div>"
+        f"<div>{''.join(chip_html)}</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+# ──────────────────────────────────────────
 # 동종업종 비교 캐시
 # ──────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -361,34 +492,203 @@ def render_session_recommendations(db, session: str):
     if st.session_state.get(f"show_trend_{session}"):
         render_7d_trend(db, saved_dates)
 
-    # Tier별 카드 표시
+    # 강세 테마 박스 (테이블 위)
     st.divider()
+    render_hot_themes(recs)
 
-    # 세션 단일 고정 → tier별 분류
-    tiered = {"large": [], "mid": [], "small": []}
-    for r in recs:
-        tier = r.get("tier")
-        if tier in tiered:
-            tiered[tier].append(r)
-
-    tier_meta = get_tier_meta()
-
+    # 컴팩트 정렬 테이블 + 종목 상세 펼침
     st.markdown(f"## {emoji} {label}")
-
-    has_any = False
-    for tier in ["large", "mid", "small"]:
-        items = tiered[tier]
-        if not items:
-            continue
-        has_any = True
-        tier_label, tier_desc = tier_meta[tier]
-        st.markdown(f"### {tier_label} _({tier_desc})_")
-        for stock in items:
-            _stock_card(stock, mode=f"{session}_{tier}")
-        st.markdown("")
-
-    if not has_any:
-        st.info(t("rec_no_saved_for_date"))
+    render_recommendations_table(recs, session)
 
     st.divider()
     st.caption(t("rec_footer"))
+
+
+# ──────────────────────────────────────────
+# 시안 B — 컴팩트 정렬 테이블 + 상세 펼침
+# ──────────────────────────────────────────
+def render_recommendations_table(recs: list[dict], session: str):
+    """추천 종목 컴팩트 테이블 + 종목 선택 시 상세 펼침."""
+    if not recs:
+        st.info(t("rec_no_saved_for_date"))
+        return
+
+    # 컬럼명 (lang 일관성 위해 캐시)
+    _c_rank = t("rec_tbl_col_rank")
+    _c_stock = t("rec_tbl_col_stock")
+    _c_tier = t("rec_tbl_col_tier")
+    _c_theme = t("rec_tbl_col_theme")
+    _c_price = t("rec_tbl_col_price")
+    _c_change = t("rec_tbl_col_change")
+    _c_score = t("rec_tbl_col_score")
+    _c_horizon = t("rec_tbl_col_horizon")
+    _c_foreign = t("rec_tbl_col_foreign5d")
+    _c_inst = t("rec_tbl_col_inst5d")
+    _c_reason = t("rec_tbl_col_reason")
+
+    tier_meta = get_tier_meta()
+    tier_short = {"large": tier_meta["large"][0], "mid": tier_meta["mid"][0], "small": tier_meta["small"][0]}
+
+    rows = []
+    for r in recs:
+        code = r.get("stock_code")
+        sig = r.get("signals") or []
+        h_key, _, _ = classify_horizon(sig, change_pct=r.get("change_pct"))
+        sector = _peer_data(code, max_peers=1).get("sector_name") or "-"
+        try:
+            chg = float(r.get("change_pct") or 0)
+        except (TypeError, ValueError):
+            chg = 0
+        # 핵심 이유: 첫 2개만
+        key_reasons = " · ".join(str(s) for s in sig[:2]) if sig else "-"
+        tier = r.get("tier", "")
+        rows.append({
+            "_tier_order": {"large": 0, "mid": 1, "small": 2}.get(tier, 3),
+            _c_rank: r.get("rank_in_tier", 0),
+            _c_stock: f"{r.get('stock_name', '')} ({code})",
+            _c_tier: tier_short.get(tier, tier),
+            _c_theme: sector,
+            _c_price: int(float(r.get("price") or 0)) if r.get("price") else 0,
+            _c_change: chg,
+            _c_score: int(r.get("score") or 0),
+            _c_horizon: t(h_key),
+            _c_foreign: int(r.get("foreign_5d") or 0),
+            _c_inst: int(r.get("inst_5d") or 0),
+            _c_reason: key_reasons,
+        })
+
+    df = pd.DataFrame(rows).sort_values(["_tier_order", _c_rank]).drop("_tier_order", axis=1).reset_index(drop=True)
+
+    st.dataframe(
+        df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            _c_price: st.column_config.NumberColumn(format="%d"),
+            _c_change: st.column_config.NumberColumn(format="%+.2f%%"),
+            _c_score: st.column_config.NumberColumn(format="%+d"),
+            _c_foreign: st.column_config.NumberColumn(format="%+d 억"),
+            _c_inst: st.column_config.NumberColumn(format="%+d 억"),
+        },
+    )
+
+    st.caption(f"💡 {t('rec_horizon_hint')}")
+
+    # 종목 선택 → 상세 펼침
+    st.markdown("---")
+    options = ["—"] + [f"{r.get('stock_name', '')} ({r.get('stock_code', '')})" for r in recs]
+    sel = st.selectbox(t("rec_detail_select"), options, key=f"rec_{session}_detail_sel")
+    if sel and sel != "—":
+        sel_code = sel.split("(")[-1].rstrip(")")
+        sel_rec = next((r for r in recs if r.get("stock_code") == sel_code), None)
+        if sel_rec:
+            _render_stock_detail(sel_rec, session)
+
+
+def _render_stock_detail(stock: dict, session: str):
+    """선택된 종목 상세: 관점 + 추천 이유 전체 + 동종업종 비교."""
+    code = stock.get("stock_code", "")
+    name = stock.get("stock_name", "")
+    price = stock.get("price")
+    change_pct = stock.get("change_pct")
+    score = stock.get("score", 0)
+    market_cap = stock.get("market_cap_eok") or 0
+    foreign_5d = stock.get("foreign_5d") or 0
+    inst_5d = stock.get("inst_5d") or 0
+    signals = stock.get("signals") or []
+    h_key, short_score, long_score = classify_horizon(signals, change_pct=change_pct)
+    sector = _peer_data(code, max_peers=1).get("sector_name") or t("rec_card_no_theme")
+    won = t("rec_unit_won")
+    eok = t("rec_unit_eok")
+
+    with st.container(border=True):
+        # 헤더
+        hc1, hc2, hc3 = st.columns([3, 2, 2])
+        with hc1:
+            st.markdown(f"### {name}  `{code}`")
+            st.markdown(
+                f"<div style='display:inline-block;padding:2px 10px;border-radius:10px;"
+                f"background:#EEF3FB;color:#1B6FB0;font-size:0.85rem;font-weight:600;margin-right:6px;'>"
+                f"{t('rec_card_theme')}: {sector}</div>"
+                f"<div style='display:inline-block;padding:2px 10px;border-radius:10px;"
+                f"background:#FFF4E6;color:#B5651D;font-size:0.85rem;font-weight:600;'>"
+                f"{t('rec_detail_horizon_label')}: {t(h_key)} "
+                f"<span style='color:#888;font-weight:400;'>(단타 {short_score} · 장기 {long_score})</span></div>",
+                unsafe_allow_html=True,
+            )
+        with hc2:
+            cs = f"{float(change_pct):+.2f}%" if change_pct else None
+            st.metric(t("rec_card_price"), f"{int(float(price)):,}{won}" if price else "-", cs)
+        with hc3:
+            st.metric(t("rec_card_score"), f"{int(score):+}")
+
+        # 보조 지표
+        dc1, dc2, dc3, dc4 = st.columns(4)
+        with dc1:
+            st.metric(t("rec_card_marketcap"), f"{int(market_cap):,}{eok}" if market_cap else "-")
+        with dc2:
+            f_color = "🟢" if foreign_5d > 0 else ("🔴" if foreign_5d < 0 else "⚪")
+            st.metric(t("rec_card_foreign5d"), f"{f_color} {int(foreign_5d):+,}{eok}" if foreign_5d else "-")
+        with dc3:
+            i_color = "🟢" if inst_5d > 0 else ("🔴" if inst_5d < 0 else "⚪")
+            st.metric(t("rec_card_inst5d"), f"{i_color} {int(inst_5d):+,}{eok}" if inst_5d else "-")
+        with dc4:
+            if st.button(t("rec_card_detail"), key=f"detail_btn_{session}_{code}", use_container_width=True):
+                st.session_state["last_query"] = name
+                st.switch_page("app.py")
+
+        # 추천 이유 (전체)
+        st.markdown(
+            f"<div style='margin-top:8px;padding:10px 14px;border-radius:8px;"
+            f"background:#FFF9E6;border-left:4px solid #F1C40F;'>"
+            f"<div style='font-weight:700;color:#7A5C00;margin-bottom:4px;'>"
+            f"{t('rec_detail_all_reasons')}</div>"
+            + (
+                "<ul style='margin:0;padding-left:20px;color:#5A4500;'>"
+                + "".join(f"<li>{sig}</li>" for sig in signals)
+                + "</ul>"
+                if signals
+                else f"<div style='color:#8A7000;'>{t('rec_card_no_reasons')}</div>"
+            )
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+
+        # 동종업종 비교
+        with st.expander(t("rec_sector_compare"), expanded=False):
+            sec_full = _peer_data(code, max_peers=6)
+            peers = sec_full.get("peers") or []
+            sector_label = sec_full.get("sector_name") or t("rec_card_no_theme")
+            if not peers:
+                st.caption(t("rec_peer_unavailable"))
+            else:
+                st.caption(t("rec_peer_top").format(sector=sector_label, n=len(peers)))
+                rows = []
+                for p in peers:
+                    is_self = p["code"] == code
+                    rows.append({
+                        t("rec_peer_col_compare"): t("rec_peer_col_self") if is_self else "",
+                        t("rec_peer_col_stock"): f"{p['name']} ({p['code']})",
+                        t("rec_peer_col_price"): f"{int(p['price']):,}" if p.get("price") else "-",
+                        t("rec_peer_col_change"): f"{p['change_pct']:+.2f}%",
+                    })
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+                avg = sum(p["change_pct"] for p in peers) / len(peers)
+                self_chg = next((p["change_pct"] for p in peers if p["code"] == code), None)
+                sec_color = "#E74C3C" if avg > 0 else ("#0064FF" if avg < 0 else "#7F8C8D")
+                if self_chg is not None:
+                    diff = self_chg - avg
+                    rel_msg = (
+                        f" · {t('rec_peer_self_vs_sector')} <strong>{self_chg:+.2f}%</strong> "
+                        f"({t('rec_peer_sector_diff')} <strong style='color:{sec_color};'>{diff:+.2f}%p</strong>)"
+                    )
+                else:
+                    rel_msg = ""
+                st.markdown(
+                    f"<div style='padding:6px 10px;border-radius:6px;background:{sec_color}10;"
+                    f"border-left:3px solid {sec_color};font-size:0.85rem;'>"
+                    f"{t('rec_peer_sector_avg')} <strong style='color:{sec_color};'>{avg:+.2f}%</strong>"
+                    f"{rel_msg}</div>",
+                    unsafe_allow_html=True,
+                )

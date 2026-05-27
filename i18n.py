@@ -403,6 +403,34 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "zh-TW": "⚡ DB 即時查詢模式 · 每工作日自動分析 (GitHub Actions): 🌅 08:00 / ☀️ 14:00 / 🌙 21:00 KST",
     },
 
+    # 강세 테마 + 단타/장기 관점 + 컴팩트 테이블
+    "rec_hot_themes_title": {"ko": "🔥 오늘 강세 테마", "zh-TW": "🔥 今日強勢主題"},
+    "rec_hot_themes_empty": {"ko": "테마 데이터 부족", "zh-TW": "主題資料不足"},
+    "rec_hot_themes_stocks": {"ko": "종목", "zh-TW": "檔"},
+    "rec_hot_themes_avg": {"ko": "평균", "zh-TW": "平均"},
+    "rec_horizon_short": {"ko": "🚀 단타", "zh-TW": "🚀 短線"},
+    "rec_horizon_long": {"ko": "🏔 장기", "zh-TW": "🏔 長線"},
+    "rec_horizon_both": {"ko": "🚀🏔 단타+장기", "zh-TW": "🚀🏔 短線+長線"},
+    "rec_horizon_neutral": {"ko": "⚖ 중립", "zh-TW": "⚖ 中立"},
+    "rec_horizon_hint": {
+        "ko": "단타: RSI/거래량/신고가/ADX 등 단기 모멘텀 시그널 / 장기: 정배열/MACD/외인 연속 등 추세 시그널",
+        "zh-TW": "短線: RSI/成交量/新高/ADX等短期動能 / 長線: 均線排列/MACD/外資連續等趨勢訊號",
+    },
+    "rec_tbl_col_rank": {"ko": "순위", "zh-TW": "排名"},
+    "rec_tbl_col_stock": {"ko": "종목", "zh-TW": "個股"},
+    "rec_tbl_col_tier": {"ko": "Tier", "zh-TW": "階層"},
+    "rec_tbl_col_theme": {"ko": "테마", "zh-TW": "主題"},
+    "rec_tbl_col_price": {"ko": "현재가", "zh-TW": "現價"},
+    "rec_tbl_col_change": {"ko": "등락률", "zh-TW": "漲跌幅"},
+    "rec_tbl_col_score": {"ko": "점수", "zh-TW": "分數"},
+    "rec_tbl_col_horizon": {"ko": "관점", "zh-TW": "觀點"},
+    "rec_tbl_col_foreign5d": {"ko": "외인 5일", "zh-TW": "外資5日"},
+    "rec_tbl_col_inst5d": {"ko": "기관 5일", "zh-TW": "機構5日"},
+    "rec_tbl_col_reason": {"ko": "핵심 이유", "zh-TW": "核心理由"},
+    "rec_detail_select": {"ko": "🔍 종목 선택 (상세 펼침)", "zh-TW": "🔍 選擇個股 (展開詳細)"},
+    "rec_detail_all_reasons": {"ko": "💡 추천 이유 (전체)", "zh-TW": "💡 推薦理由 (全部)"},
+    "rec_detail_horizon_label": {"ko": "📊 관점", "zh-TW": "📊 觀點"},
+
     # ════════════════════════════════
     # 거시경제 헤더
     # ════════════════════════════════
