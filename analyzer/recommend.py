@@ -327,17 +327,254 @@ def evaluate_stock(code: str, name: str, market_cap_eok: int, price: float = 0, 
 # 4. 메인 추천 함수
 # =========================================================
 
+def _get_us_movers() -> list[dict]:
+    """미장 주요 종목 어제 등락률."""
+    import FinanceDataReader as fdr
+    import datetime as dt
+    tickers = {
+        "NVDA": "엔비디아", "AMD": "AMD", "TSM": "TSMC",
+        "AAPL": "애플", "MSFT": "마이크로소프트", "GOOGL": "구글",
+        "AMZN": "아마존", "META": "메타", "TSLA": "테슬라",
+        "JPM": "JP모건", "XOM": "엑손모빌",
+    }
+    end = dt.date.today()
+    start = end - dt.timedelta(days=10)
+    movers = []
+    for sym, name in tickers.items():
+        try:
+            df = fdr.DataReader(sym, start, end)
+            if len(df) >= 2:
+                close = float(df.iloc[-1]["Close"])
+                prev = float(df.iloc[-2]["Close"])
+                chg = (close / prev - 1) * 100
+                movers.append({"ticker": sym, "name": name, "change": chg})
+        except Exception:
+            pass
+    return movers
+
+
+def _claude_sector_mapping(movers: list[dict]) -> dict:
+    """Claude API로 미장 강세/약세 종목 → 한국 동조 섹터 매핑.
+
+    Returns:
+        {"strong": ["반도체", ...], "weak": ["통신서비스", ...]}
+        실패/키 없음 시 빈 dict
+    """
+    import os
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key or not movers:
+        return {}
+    strong = [m for m in movers if m["change"] >= 1.5]
+    weak = [m for m in movers if m["change"] <= -1.5]
+    if not strong and not weak:
+        return {}
+    s_str = ", ".join(f"{m['name']} +{m['change']:.1f}%" for m in strong) if strong else "(없음)"
+    w_str = ", ".join(f"{m['name']} {m['change']:.1f}%" for m in weak) if weak else "(없음)"
+    prompt = f"""미장 어제 종가 기준 주요 종목 등락:
+- 강세 종목: {s_str}
+- 약세 종목: {w_str}
+
+이 흐름이 오늘 한국 코스피/코스닥에서 동조할 가능성이 높은 섹터를 매핑해줘.
+- 한국 KSIC 업종명 기준 (예: "반도체와반도체장비", "자동차", "조선", "제약")
+- 강세 미장 종목 → 한국 강세 후보 섹터
+- 약세 미장 종목 → 한국 약세 후보 섹터
+- 각 최대 5개
+
+오직 JSON만 응답: {{"strong": ["섹터1", "섹터2"], "weak": ["섹터3"]}}"""
+    try:
+        from anthropic import Anthropic
+        client = Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=400,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = resp.content[0].text if resp.content else ""
+        import json, re
+        m = re.search(r"\{.*?\}", text, re.DOTALL)
+        if m:
+            data = json.loads(m.group())
+            return {
+                "strong": list(data.get("strong") or [])[:5],
+                "weak": list(data.get("weak") or [])[:5],
+            }
+    except Exception as e:
+        print(f"[WARN] Claude API 섹터 매핑 실패: {e}")
+    return {}
+
+
+def get_overnight_context() -> dict:
+    """morning 추천용 — 미장 종합 지수 + 환율 + Claude 섹터 매핑.
+
+    Returns:
+        {
+            "available": bool,
+            "global_score": int,
+            "fx_krw": float,
+            "fx_change_pct": float,
+            "strong_sectors": list[str],   # Claude 매핑 강세 섹터
+            "weak_sectors": list[str],     # Claude 매핑 약세 섹터
+            "details": list[str],
+        }
+    """
+    out = {
+        "available": False, "global_score": 0,
+        "fx_krw": 0, "fx_change_pct": 0,
+        "strong_sectors": [], "weak_sectors": [],
+        "details": [],
+    }
+    try:
+        import FinanceDataReader as fdr
+        import datetime as dt
+        end = dt.date.today()
+        start = end - dt.timedelta(days=10)
+
+        # 미장 (어제 종가 + 전날 대비 % 평균)
+        global_pcts = []
+        for sym, label in [("IXIC", "나스닥"), ("US500", "S&P500"), ("DJI", "다우")]:
+            try:
+                df = fdr.DataReader(sym, start, end)
+                if len(df) >= 2:
+                    close = float(df.iloc[-1]["Close"])
+                    prev = float(df.iloc[-2]["Close"])
+                    chg = (close / prev - 1) * 100
+                    global_pcts.append((label, chg))
+            except Exception:
+                pass
+        if global_pcts:
+            avg_global = sum(p for _, p in global_pcts) / len(global_pcts)
+            # 미장 종합 점수 (-15 ~ +15)
+            if avg_global >= 1.5:
+                out["global_score"] = 15
+                out["details"].append(f"🌍 미장 강세 (평균 +{avg_global:.2f}%) → 갭상승 가능")
+            elif avg_global >= 0.5:
+                out["global_score"] = 8
+                out["details"].append(f"🌍 미장 상승 (+{avg_global:.2f}%)")
+            elif avg_global <= -1.5:
+                out["global_score"] = -15
+                out["details"].append(f"🌍 미장 약세 ({avg_global:.2f}%) → 갭하락 우려")
+            elif avg_global <= -0.5:
+                out["global_score"] = -8
+                out["details"].append(f"🌍 미장 하락 ({avg_global:.2f}%)")
+            else:
+                out["details"].append(f"🌍 미장 횡보 ({avg_global:+.2f}%)")
+
+        # 환율 (USD/KRW)
+        try:
+            fx_df = fdr.DataReader("USD/KRW", start, end)
+            if len(fx_df) >= 2:
+                fx_close = float(fx_df.iloc[-1]["Close"])
+                fx_prev = float(fx_df.iloc[-2]["Close"])
+                fx_chg = (fx_close / fx_prev - 1) * 100
+                out["fx_krw"] = fx_close
+                out["fx_change_pct"] = fx_chg
+                if fx_chg >= 0.3:
+                    out["details"].append(f"💱 원화 약세 ({fx_close:,.0f}원, +{fx_chg:.2f}%) → 수출주 우대")
+                elif fx_chg <= -0.3:
+                    out["details"].append(f"💱 원화 강세 ({fx_close:,.0f}원, {fx_chg:.2f}%) → 내수주 우대")
+                else:
+                    out["details"].append(f"💱 환율 안정 ({fx_close:,.0f}원, {fx_chg:+.2f}%)")
+        except Exception:
+            pass
+
+        # 🤖 Claude API로 미장 → 한국 섹터 동조 매핑 (선택, ANTHROPIC_API_KEY 있을 때만)
+        try:
+            us_movers = _get_us_movers()
+            mapping = _claude_sector_mapping(us_movers)
+            if mapping:
+                out["strong_sectors"] = mapping.get("strong", [])
+                out["weak_sectors"] = mapping.get("weak", [])
+                if out["strong_sectors"]:
+                    out["details"].append(
+                        f"🤖 Claude 매핑 강세 후보: {', '.join(out['strong_sectors'])}"
+                    )
+                if out["weak_sectors"]:
+                    out["details"].append(
+                        f"🤖 Claude 매핑 약세 후보: {', '.join(out['weak_sectors'])}"
+                    )
+        except Exception:
+            pass
+
+        out["available"] = bool(out["details"])
+    except Exception:
+        pass
+    return out
+
+
+# 수출주/내수주 섹터 키워드 (환율 영향)
+_EXPORT_KEYWORDS = ("반도체", "자동차", "조선", "철강", "화학", "전자", "디스플레이", "정보통신")
+_DOMESTIC_KEYWORDS = ("유통", "금융", "은행", "보험", "통신서비스", "건설", "음식료", "유틸리티")
+
+
+def _apply_overnight_bonus(stock: dict, ctx: dict) -> dict:
+    """morning 추천 시 미장/환율 기반 보너스 점수 적용."""
+    if not ctx.get("available"):
+        return stock
+    bonus = 0
+    extra_signals = []
+
+    # 미장 종합 점수 (모든 종목 공통)
+    g_score = ctx.get("global_score", 0)
+    if g_score:
+        bonus += g_score
+        if g_score > 0:
+            extra_signals.append(f"🌍 미장 강세 보너스 +{g_score}")
+        elif g_score < 0:
+            extra_signals.append(f"🌍 미장 약세 페널티 {g_score}")
+
+    # 환율 → 수출/내수 가중치
+    sector = (stock.get("sector_name") or "")
+    fx_chg = ctx.get("fx_change_pct", 0)
+    if fx_chg >= 0.3:
+        if any(k in sector for k in _EXPORT_KEYWORDS):
+            bonus += 8
+            extra_signals.append(f"💱 원화 약세 + 수출 섹터 +8")
+        elif any(k in sector for k in _DOMESTIC_KEYWORDS):
+            bonus -= 5
+            extra_signals.append(f"💱 원화 약세 + 내수 섹터 -5")
+    elif fx_chg <= -0.3:
+        if any(k in sector for k in _DOMESTIC_KEYWORDS):
+            bonus += 8
+            extra_signals.append(f"💱 원화 강세 + 내수 섹터 +8")
+        elif any(k in sector for k in _EXPORT_KEYWORDS):
+            bonus -= 5
+            extra_signals.append(f"💱 원화 강세 + 수출 섹터 -5")
+
+    # 🤖 Claude 매핑 — 미장 강세/약세 종목 → 한국 동조 섹터 보너스
+    for strong_sec in ctx.get("strong_sectors", []):
+        if strong_sec and strong_sec in sector:
+            bonus += 12
+            extra_signals.append(f"🎯 {strong_sec} (미장 동조 강세) +12")
+            break
+    for weak_sec in ctx.get("weak_sectors", []):
+        if weak_sec and weak_sec in sector:
+            bonus -= 10
+            extra_signals.append(f"⚠ {weak_sec} (미장 동조 약세) -10")
+            break
+
+    if bonus:
+        stock["score"] = int(stock.get("score", 0)) + bonus
+        stock["total_score"] = float(stock.get("total_score", 0)) + bonus
+        stock["overnight_bonus"] = bonus
+        sigs = list(stock.get("signals") or [])
+        sigs.extend(extra_signals)
+        stock["signals"] = sigs
+    return stock
+
+
 def recommend(top_n_per_tier: int = 3, exclude: set | None = None,
-              n_per_source: int = 20) -> dict:
+              n_per_source: int = 20, session: str = "evening") -> dict:
     """매번 시장 현재 상태로 동적 추천.
 
     1. 4가지 소스에서 활성 종목 수집 (~150개)
     2. ETF/우선주 자동 제외
     3. 보유 종목 제외
     4. 종목별 평가
-    5. Tier별 상위 N개 반환
+    5. (morning 한정) 미장/환율 보너스 점수 적용
+    6. Tier별 상위 N개 반환
     """
     excluded = exclude if exclude is not None else EXCLUDED_HOLDINGS
+    overnight_ctx = get_overnight_context() if session == "morning" else {"available": False}
 
     print(f"[*] 동적 후보 수집 중 (시장 현재 상태)...")
     candidates = collect_active_stocks(top_n=n_per_source)
@@ -363,6 +600,9 @@ def recommend(top_n_per_tier: int = 3, exclude: set | None = None,
                 change_pct=stock_info.get("change_pct", "0"),
             )
             result["sources"] = info["sources"]
+            # morning 한정 미장/환율 보너스 적용
+            if session == "morning" and overnight_ctx.get("available"):
+                result = _apply_overnight_bonus(result, overnight_ctx)
             evaluated.append(result)
             processed += 1
             if processed % 20 == 0:

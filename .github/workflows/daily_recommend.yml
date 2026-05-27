@@ -2,8 +2,8 @@ name: Daily Stock Recommendations
 
 on:
   schedule:
-    # 🌅 평일 08:00 KST (전날 UTC 23:00) — 장 시작 전
-    - cron: '0 23 * * 0-4'
+    # 🌅 평일 07:30 KST (전날 UTC 22:30) — 장 시작 전, 미장 마감 직후
+    - cron: '30 22 * * 0-4'
     # 🌙 평일 21:00 KST (UTC 12:00) — NXT 마감 후
     - cron: '0 12 * * 1-5'
   workflow_dispatch:
@@ -51,8 +51,8 @@ jobs:
           SESSION="${{ inputs.session }}"
           if [ -z "$SESSION" ]; then
             case "${{ github.event.schedule }}" in
-              "0 23 * * 0-4") SESSION="morning" ;;
-              "0 12 * * 1-5") SESSION="evening" ;;
+              "30 22 * * 0-4") SESSION="morning" ;;
+              "0 12 * * 1-5")  SESSION="evening" ;;
               *) SESSION="evening" ;;
             esac
           fi

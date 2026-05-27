@@ -906,10 +906,11 @@ def render_ichimoku_chart(
         "▓ 구름 (선행스팬 A/B, +26)\n"
         "▼ 시간 변곡 (9/17/26봉)"
     )
+    # 범례 위치: 좌측 상단 (우측 하단은 ▼ 시간 사이클 마커와 겹침)
     ax_main.text(
-        0.99, 0.02, legend_text,
+        0.01, 0.02, legend_text,
         transform=ax_main.transAxes,
-        fontsize=8.5, va="bottom", ha="right",
+        fontsize=8.5, va="bottom", ha="left",
         color="#555",
         bbox=dict(boxstyle="round,pad=0.4", facecolor="white",
                  edgecolor="#CCCCCC", alpha=0.9),

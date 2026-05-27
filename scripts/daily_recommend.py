@@ -51,7 +51,7 @@ def run_daily_recommend(top_n: int = 5, session: str = "evening", target_date: s
 
     print(f"[INFO] 추천 분석 시작 (top_n={top_n}, session={session})")
     try:
-        results = recommend.recommend(top_n_per_tier=top_n, exclude=exclude)
+        results = recommend.recommend(top_n_per_tier=top_n, exclude=exclude, session=session)
     except Exception as e:
         print(f"[ERROR] recommend 실패: {e}")
         import traceback

@@ -13,3 +13,4 @@ supabase
 pykrx
 squarify
 Pillow
+anthropic
