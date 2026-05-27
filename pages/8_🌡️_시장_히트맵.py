@@ -137,14 +137,22 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
 
-# 한글 폰트
-for fn in ["Malgun Gothic", "NanumGothic", "AppleGothic"]:
-    try:
-        if any(f.name == fn for f in font_manager.fontManager.ttflist):
-            plt.rcParams["font.family"] = fn
-            break
-    except Exception:
-        pass
+# CJK 폰트 fallback chain (한글 + 번체/간체 한자 모두 커버)
+# 한국 폰트는 KS 한자만 → 번체 전용 한자(値, 檔, 顏 등) 글리프 없어 □ 표시 발생
+# 여러 폰트 우선순위 등록 시 matplotlib가 글리프 없는 문자에 대해 자동 fallback
+plt.rcParams["font.family"] = "sans-serif"
+plt.rcParams["font.sans-serif"] = [
+    "Malgun Gothic",         # Windows 한글
+    "NanumGothic",           # Linux 한글 (Streamlit Cloud)
+    "AppleGothic",           # macOS 한글
+    "Noto Sans CJK TC",      # 번체 (Cloud, packages.txt로 설치)
+    "Noto Sans CJK JP",      # 일본어 + 번체 일부
+    "Noto Sans CJK KR",      # 한글 (CJK 통합)
+    "Microsoft JhengHei",    # Windows 번체
+    "Microsoft YaHei",       # Windows 간체+번체 일부
+    "PingFang TC",           # macOS 번체
+    "DejaVu Sans",
+]
 plt.rcParams["axes.unicode_minus"] = False
 
 

@@ -1,2 +1,4 @@
 fonts-nanum
+fonts-noto-cjk
+fonts-noto-cjk-extra
 fontconfig

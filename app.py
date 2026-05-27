@@ -330,13 +330,14 @@ with col_right:
         import matplotlib.pyplot as plt
         from matplotlib import font_manager
 
-        for fn in ["Malgun Gothic", "NanumGothic", "AppleGothic"]:
-            try:
-                if any(f.name == fn for f in font_manager.fontManager.ttflist):
-                    plt.rcParams["font.family"] = fn
-                    break
-            except Exception:
-                pass
+        # CJK 폰트 fallback chain — 한글 + 번체/간체 한자 모두 커버
+        plt.rcParams["font.family"] = "sans-serif"
+        plt.rcParams["font.sans-serif"] = [
+            "Malgun Gothic", "NanumGothic", "AppleGothic",
+            "Noto Sans CJK TC", "Noto Sans CJK JP", "Noto Sans CJK KR",
+            "Microsoft JhengHei", "Microsoft YaHei", "PingFang TC",
+            "DejaVu Sans",
+        ]
 
         fig, ax = plt.subplots(figsize=(5, 5))
         colors = plt.cm.Pastel1(range(len(weights)))
