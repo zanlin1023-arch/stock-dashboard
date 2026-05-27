@@ -501,7 +501,7 @@ for i in range(0, len(per_stock), 3):
                 )
                 if s.get("action"):
                     st.caption(f"{t('home_card_signal')}: {s['action']}")
-                if st.button(t("detail_analysis"), key=f"dash_anly_{s['code']}", use_container_width=True):
+                if st.button(t("detail_analysis"), key=f"dash_anly_{i}_{j}_{s['code']}", use_container_width=True):
                     st.session_state["last_query"] = s["name"]
                     st.switch_page("pages/5_🔬_종목_분석.py")
 
