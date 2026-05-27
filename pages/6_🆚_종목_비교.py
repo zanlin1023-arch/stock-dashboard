@@ -13,4 +13,4 @@ sidebar_nav()
 st.title(t("compare_title"))
 st.info(t("compare_moved_info"))
 if st.button(t("compare_goto_recommend"), type="primary"):
-    st.switch_page("pages/4_🎯_추천_종목.py")
+    st.switch_page("pages/4a_🌅_morning_추천.py")

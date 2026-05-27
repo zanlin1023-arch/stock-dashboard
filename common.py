@@ -122,7 +122,7 @@ def nav_bar(current_page: str = ""):
                 st.switch_page("app.py")
     with cols[2]:
         if st.button(t("btn_recommend_short"), use_container_width=True, key=f"nav_r_{current_page}"):
-            st.switch_page("pages/4_🎯_추천_종목.py")
+            st.switch_page("pages/4a_🌅_morning_추천.py")
     with cols[3]:
         if st.button(t("btn_holdings_short"), use_container_width=True, key=f"nav_h_{current_page}"):
             st.switch_page("pages/1_💼_보유_종목.py")
@@ -139,8 +139,8 @@ def _switch_to(page_name: str):
         "analyze": "pages/5_🔬_종목_분석.py",
         "holdings": "pages/1_💼_보유_종목.py",
         "watchlist": "pages/2_⭐_관심_종목.py",
-        "history": "pages/3_📜_분석_히스토리.py",
-        "recommend": "pages/4_🎯_추천_종목.py",
+        "history": "pages/3a_💼_자동_보유_히스토리.py",
+        "recommend": "pages/4a_🌅_morning_추천.py",
         "compare": "pages/6_🆚_종목_비교.py",
         "calendar": "pages/7_📅_캘린더.py",
         "heatmap": "pages/8_🌡️_시장_히트맵.py",
@@ -150,77 +150,60 @@ def _switch_to(page_name: str):
 
 
 def sidebar_nav():
-    """사이드바에 항상 표시되는 페이지 메뉴."""
+    """사이드바에 항상 표시되는 페이지 메뉴 (sub-nav 포함)."""
     from i18n import t, language_selector
     language_selector("sidebar")
     with st.sidebar:
+        # 들여쓴 sub-link 스타일 (page_link 대상)
+        st.markdown(
+            """
+            <style>
+            section[data-testid="stSidebar"] [data-testid="stVerticalBlock"]
+                > div.subnav-wrap {
+                margin: -2px 0 6px 14px;
+                padding: 2px 0 2px 10px;
+                border-left: 2px solid #E0E0E0;
+            }
+            section[data-testid="stSidebar"] div.subnav-wrap a[data-testid="stPageLink-NavLink"] {
+                padding: 2px 6px !important;
+            }
+            section[data-testid="stSidebar"] div.subnav-wrap a[data-testid="stPageLink-NavLink"] p,
+            section[data-testid="stSidebar"] div.subnav-wrap a[data-testid="stPageLink-NavLink"] span {
+                font-size: 0.82rem !important;
+                color: #555 !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
         st.markdown(f"### {t('menu')}")
         st.page_link("app.py", label=t("nav_dashboard"), icon=None)
         st.page_link("pages/5_🔬_종목_분석.py", label=t("nav_analyze"))
-        st.page_link("pages/4_🎯_추천_종목.py", label=t("nav_recommend"))
+
+        # 🎯 추천 종목 + sub-nav (세션별 3개)
+        st.markdown(f"**{t('nav_recommend')}**")
+        st.markdown('<div class="subnav-wrap">', unsafe_allow_html=True)
+        st.page_link("pages/4a_🌅_morning_추천.py", label=t("nav_rec_morning"))
+        st.page_link("pages/4b_☀️_intraday_추천.py", label=t("nav_rec_intraday"))
+        st.page_link("pages/4c_🌙_evening_추천.py", label=t("nav_rec_evening"))
+        st.markdown('</div>', unsafe_allow_html=True)
+
         st.page_link("pages/1_💼_보유_종목.py", label=t("nav_holdings"))
         st.page_link("pages/2_⭐_관심_종목.py", label=t("nav_watchlist"))
-        st.page_link("pages/3_📜_분석_히스토리.py", label=t("nav_history"))
-        # 분석 히스토리 진입 시에만 하위 카테고리 라디오 노출
-        if st.session_state.get("_current_page") == "분석 히스토리":
-            _render_history_subnav()
+
+        # 📜 분석 히스토리 + sub-nav (카테고리 3개)
+        st.markdown(f"**{t('nav_history')}**")
+        st.markdown('<div class="subnav-wrap">', unsafe_allow_html=True)
+        st.page_link("pages/3a_💼_자동_보유_히스토리.py", label=t("nav_hist_auto_hold"))
+        st.page_link("pages/3b_⭐_자동_관심_히스토리.py", label=t("nav_hist_auto_watch"))
+        st.page_link("pages/3c_👤_수동_분석_히스토리.py", label=t("nav_hist_manual"))
+        st.markdown('</div>', unsafe_allow_html=True)
+
         # 종목 비교는 추천 종목 카드 내부에 통합되어 별도 메뉴 제거
         st.page_link("pages/7_📅_캘린더.py", label=t("nav_calendar"))
         st.page_link("pages/8_🌡️_시장_히트맵.py", label=t("nav_heatmap"))
         st.divider()
-
-
-def _render_history_subnav():
-    """분석 히스토리 페이지 진입 시 사이드바 메뉴 바로 아래에 들여쓴 라디오."""
-    from i18n import t
-    counts = st.session_state.get("_hist_counts", {"auto_hold": 0, "auto_watch": 0, "manual": 0})
-
-    # 라디오 자체에 직접 들여쓰기 + 좌측 세로선 + 작은 폰트 (Streamlit native 라디오)
-    st.markdown(
-        """
-        <style>
-        section[data-testid="stSidebar"] [data-testid="stRadio"] {
-            margin: -4px 0 10px 14px;
-            padding: 4px 0 4px 10px;
-            border-left: 2px solid #E0E0E0;
-        }
-        section[data-testid="stSidebar"] [data-testid="stRadio"] > label {
-            display: none;
-        }
-        section[data-testid="stSidebar"] [data-testid="stRadio"] > div {
-            gap: 2px;
-        }
-        section[data-testid="stSidebar"] [data-testid="stRadio"] label[data-baseweb="radio"] {
-            font-size: 0.82rem;
-            padding: 2px 4px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        section[data-testid="stSidebar"] [data-testid="stRadio"] label[data-baseweb="radio"]:hover {
-            background: #F0F2F6;
-        }
-        section[data-testid="stSidebar"] [data-testid="stRadio"] label[data-baseweb="radio"] > div:first-child {
-            transform: scale(0.8);
-        }
-        section[data-testid="stSidebar"] [data-testid="stRadio"] label[data-baseweb="radio"] > div:last-child p {
-            font-size: 0.82rem !important;
-            color: #555;
-            margin: 0;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    hold_label = f"{t('hist_cat_auto')} ({counts.get('auto_hold', 0)})"
-    watch_label = f"{t('hist_cat_watch')} ({counts.get('auto_watch', 0)})"
-    manual_label = f"{t('hist_cat_manual')} ({counts.get('manual', 0)})"
-    st.radio(
-        "분석 히스토리 카테고리",
-        options=[hold_label, watch_label, manual_label],
-        label_visibility="collapsed",
-        key="hist_category",
-    )
 
 
 # ──────────────────────────────────────────

@@ -1,4 +1,7 @@
-"""분석 히스토리 — Supabase analysis_history 테이블 조회."""
+"""분석 히스토리 페이지 공통 helper.
+
+`pages/3a_*`, `pages/3b_*`, `pages/3c_*` 세 페이지가 함께 사용한다.
+"""
 from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
@@ -6,14 +9,7 @@ from datetime import datetime, timezone, timedelta
 import pandas as pd
 import streamlit as st
 
-from common import init_page, get_db, nav_bar, sidebar_nav, render_macro_header
 from i18n import t
-
-st.set_page_config(page_title="분석 히스토리", page_icon="📜", layout="wide")
-init_page(t("history_title"))
-sidebar_nav()
-render_macro_header()
-nav_bar("history")
 
 
 # Supabase TIMESTAMPTZ는 UTC로 저장됨 → KST(+9h)로 변환해 표시
@@ -35,82 +31,6 @@ def _to_kst_str(utc_iso: str, with_label: bool = True) -> str:
     except Exception:
         # fallback
         return utc_iso[:19].replace("T", " ")
-
-st.title(t("history_title"))
-
-db = get_db()
-if db is None:
-    st.error(t("db_disconnected"))
-    st.stop()
-
-
-# ──────────────────────────────────────────
-# 종목 필터 (또는 전체)
-# ──────────────────────────────────────────
-client = db.get_client()
-if not client:
-    st.error(t("history_db_client_fail"))
-    st.stop()
-
-# 전체 데이터 조회
-res = client.table("analysis_history").select("*").order("analyzed_at", desc=True).limit(500).execute()
-all_records = res.data or []
-
-if not all_records:
-    st.info(t("history_empty"))
-    st.stop()
-
-
-# ──────────────────────────────────────────
-# 💼 자동 보유 / ⭐ 자동 관심 / 👤 수동 일회성 — 3-way 분류
-# 카테고리 라디오는 사이드바(common._render_history_subnav)에 표시됨
-# ──────────────────────────────────────────
-# 보유/관심 종목 코드 셋 (자동 스냅샷을 보유/관심으로 분류)
-holding_codes: set[str] = set()
-watch_codes: set[str] = set()
-try:
-    for h in db.list_holdings():
-        holding_codes.add(h["stock_code"])
-except Exception:
-    pass
-try:
-    for w in db.list_watchlist():
-        watch_codes.add(w["stock_code"])
-except Exception:
-    pass
-
-scheduled = [r for r in all_records if r.get("snapshot_type") == "scheduled"]
-# 보유에 있으면 보유, 아니면 관심에 있으면 관심, 둘 다 아니면 보유로 fallback (구버전 데이터)
-auto_hold_records = [r for r in scheduled if r["stock_code"] in holding_codes]
-auto_watch_records = [
-    r for r in scheduled
-    if r["stock_code"] not in holding_codes and r["stock_code"] in watch_codes
-]
-# 보유에서 빠졌고 관심에도 없는 옛 자동 기록은 보유 탭에 표시 (orphan)
-orphan_auto = [
-    r for r in scheduled
-    if r["stock_code"] not in holding_codes and r["stock_code"] not in watch_codes
-]
-auto_hold_records += orphan_auto
-manual_records = [r for r in all_records if r.get("snapshot_type") != "scheduled"]
-
-# 사이드바 라디오용 카운트 전달 (분석 히스토리 페이지일 때 sidebar_nav가 다시 렌더되며 사용)
-st.session_state["_hist_counts"] = {
-    "auto_hold": len(auto_hold_records),
-    "auto_watch": len(auto_watch_records),
-    "manual": len(manual_records),
-}
-
-# 현재 카테고리 결정 — 이모지로 분기 (한글/중문 모두 같은 이모지 prefix)
-category = st.session_state.get("hist_category", "")
-if not category:
-    cat_mode = "hold"  # 기본
-elif category.startswith("⭐"):
-    cat_mode = "watch"
-elif category.startswith("👤"):
-    cat_mode = "manual"
-else:
-    cat_mode = "hold"
 
 
 def _render_table(records: list[dict]):
@@ -321,7 +241,7 @@ def _render_auto_section(records: list[dict], key_prefix: str,
             try:
                 import sys
                 from pathlib import Path
-                sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "analyzer"))
+                sys.path.insert(0, str(Path(__file__).resolve().parent))
                 from chart_ichimoku import render_ichimoku_chart
                 chart_path = render_ichimoku_chart(sel_code, sel_name, days=180)
                 if chart_path and chart_path.exists():
@@ -368,85 +288,115 @@ def _render_auto_section(records: list[dict], key_prefix: str,
         _render_raw_data_expanders(filtered, limit=10)
 
 
-# ══════════════════════════════════════════
-# 💼 자동 (보유 일일 스냅샷)
-# ══════════════════════════════════════════
-if cat_mode == "hold":
-    _render_auto_section(
-        records=auto_hold_records,
-        key_prefix="auto_hold",
-        caption_msg=t("hist_auto_caption"),
-        empty_msg=t("hist_auto_empty"),
-        records_title=t("hist_auto_records_title"),
-    )
-
-# ══════════════════════════════════════════
-# ⭐ 자동 (관심 일일 스냅샷)
-# ══════════════════════════════════════════
-elif cat_mode == "watch":
-    _render_auto_section(
-        records=auto_watch_records,
-        key_prefix="auto_watch",
-        caption_msg=t("hist_watch_caption"),
-        empty_msg=t("hist_watch_empty"),
-        records_title=t("hist_watch_records_title"),
-    )
-
-
-# ══════════════════════════════════════════
-# 👤 수동 (일회성 깊은 분석)
-# ══════════════════════════════════════════
-else:
+def _render_manual_section(manual_records: list[dict]):
+    """수동 (일회성 깊은 분석) 섹션 렌더."""
     st.caption(t("hist_manual_caption"))
 
     if not manual_records:
         st.info(t("hist_manual_empty"))
-    else:
-        codes_manual = sorted({(r["stock_code"], r["stock_name"]) for r in manual_records}, key=lambda x: x[1])
-        options_manual = [t("filter_all")] + [f"{name} ({code})" for code, name in codes_manual]
-        sel_manual = st.selectbox(t("filter_stock"), options_manual, key="hist_manual_stock")
+        return
 
-        filtered_manual = manual_records
-        if sel_manual != t("filter_all"):
-            sel_code_m = sel_manual.split("(")[-1].rstrip(")")
-            filtered_manual = [r for r in filtered_manual if r["stock_code"] == sel_code_m]
+    codes_manual = sorted({(r["stock_code"], r["stock_name"]) for r in manual_records}, key=lambda x: x[1])
+    options_manual = [t("filter_all")] + [f"{name} ({code})" for code, name in codes_manual]
+    sel_manual = st.selectbox(t("filter_stock"), options_manual, key="hist_manual_stock")
 
-        # 통계 — 수동은 판단 분포가 의미 있음
-        stances = [r.get("decision_stance") for r in filtered_manual if r.get("decision_stance")]
-        buy_count = sum(1 for s in stances if s in ("STRONG_BUY", "BUY"))
-        sell_count = sum(1 for s in stances if s in ("STRONG_SELL", "SELL"))
-        neutral_count = sum(1 for s in stances if s == "NEUTRAL")
+    filtered_manual = manual_records
+    if sel_manual != t("filter_all"):
+        sel_code_m = sel_manual.split("(")[-1].rstrip(")")
+        filtered_manual = [r for r in filtered_manual if r["stock_code"] == sel_code_m]
 
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric(t("hist_metric_total"), f"{len(filtered_manual)}")
-        m2.metric(t("hist_metric_stocks"), f"{len({r['stock_code'] for r in filtered_manual})}")
-        m3.metric(t("hist_metric_buy"), f"{buy_count}")
-        m4.metric(t("hist_metric_sell"), f"{sell_count}")
+    # 통계 — 수동은 판단 분포가 의미 있음
+    stances = [r.get("decision_stance") for r in filtered_manual if r.get("decision_stance")]
+    buy_count = sum(1 for s in stances if s in ("STRONG_BUY", "BUY"))
+    sell_count = sum(1 for s in stances if s in ("STRONG_SELL", "SELL"))
 
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric(t("hist_metric_total"), f"{len(filtered_manual)}")
+    m2.metric(t("hist_metric_stocks"), f"{len({r['stock_code'] for r in filtered_manual})}")
+    m3.metric(t("hist_metric_buy"), f"{buy_count}")
+    m4.metric(t("hist_metric_sell"), f"{sell_count}")
+
+    st.divider()
+    st.subheader(f"{t('hist_manual_records_title')} ({len(filtered_manual)})")
+    _render_table(filtered_manual)
+
+    # 종목별 상세 (수동 탭 — 일회성이라 raw_data 펼침이 핵심)
+    if sel_manual != t("filter_all") and filtered_manual:
         st.divider()
-        st.subheader(f"{t('hist_manual_records_title')} ({len(filtered_manual)})")
-        _render_table(filtered_manual)
+        sel_code_m = sel_manual.split("(")[-1].rstrip(")")
+        sel_name_m = sel_manual.split(" (")[0]
+        st.subheader(f"🔬 {sel_manual} {t('hist_manual_detail_title')}")
 
-        # 종목별 상세 (수동 탭 — 일회성이라 raw_data 펼침이 핵심)
-        if sel_manual != t("filter_all") and filtered_manual:
-            st.divider()
-            sel_code_m = sel_manual.split("(")[-1].rstrip(")")
-            sel_name_m = sel_manual.split(" (")[0]
-            st.subheader(f"🔬 {sel_manual} {t('hist_manual_detail_title')}")
+        # 일목 차트 (최신 시점 기준 실시간 생성)
+        with st.spinner(t("hist_chart_loading")):
+            try:
+                import sys
+                from pathlib import Path
+                sys.path.insert(0, str(Path(__file__).resolve().parent))
+                from chart_ichimoku import render_ichimoku_chart
+                chart_path = render_ichimoku_chart(sel_code_m, sel_name_m, days=180)
+                if chart_path and chart_path.exists():
+                    st.image(str(chart_path), use_container_width=True)
+            except Exception as e:
+                st.error(f"{t('hist_chart_fail')}: {e}")
 
-            # 일목 차트 (최신 시점 기준 실시간 생성)
-            with st.spinner(t("hist_chart_loading")):
-                try:
-                    import sys
-                    from pathlib import Path
-                    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "analyzer"))
-                    from chart_ichimoku import render_ichimoku_chart
-                    chart_path = render_ichimoku_chart(sel_code_m, sel_name_m, days=180)
-                    if chart_path and chart_path.exists():
-                        st.image(str(chart_path), use_container_width=True)
-                except Exception as e:
-                    st.error(f"{t('hist_chart_fail')}: {e}")
+        # raw_data 펼침
+        st.markdown(t("hist_raw_manual_title"))
+        _render_raw_data_expanders(filtered_manual, limit=10)
 
-            # raw_data 펼침
-            st.markdown(t("hist_raw_manual_title"))
-            _render_raw_data_expanders(filtered_manual, limit=10)
+
+def load_history_records(db) -> dict:
+    """analysis_history 전체 조회 + 보유/관심/수동으로 분류해 반환.
+
+    Returns:
+        dict: {
+            "auto_hold": [...],
+            "auto_watch": [...],
+            "manual": [...],
+            "empty": bool,  # 전체가 비어있는지
+        }
+    """
+    client = db.get_client()
+    if not client:
+        return {"auto_hold": [], "auto_watch": [], "manual": [], "empty": True, "client_fail": True}
+
+    res = client.table("analysis_history").select("*").order("analyzed_at", desc=True).limit(500).execute()
+    all_records = res.data or []
+
+    if not all_records:
+        return {"auto_hold": [], "auto_watch": [], "manual": [], "empty": True}
+
+    # 보유/관심 종목 코드 셋 (자동 스냅샷을 보유/관심으로 분류)
+    holding_codes: set[str] = set()
+    watch_codes: set[str] = set()
+    try:
+        for h in db.list_holdings():
+            holding_codes.add(h["stock_code"])
+    except Exception:
+        pass
+    try:
+        for w in db.list_watchlist():
+            watch_codes.add(w["stock_code"])
+    except Exception:
+        pass
+
+    scheduled = [r for r in all_records if r.get("snapshot_type") == "scheduled"]
+    auto_hold_records = [r for r in scheduled if r["stock_code"] in holding_codes]
+    auto_watch_records = [
+        r for r in scheduled
+        if r["stock_code"] not in holding_codes and r["stock_code"] in watch_codes
+    ]
+    # 보유에서 빠졌고 관심에도 없는 옛 자동 기록은 보유 탭에 표시 (orphan)
+    orphan_auto = [
+        r for r in scheduled
+        if r["stock_code"] not in holding_codes and r["stock_code"] not in watch_codes
+    ]
+    auto_hold_records += orphan_auto
+    manual_records = [r for r in all_records if r.get("snapshot_type") != "scheduled"]
+
+    return {
+        "auto_hold": auto_hold_records,
+        "auto_watch": auto_watch_records,
+        "manual": manual_records,
+        "empty": False,
+    }

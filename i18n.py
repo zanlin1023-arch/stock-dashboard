@@ -34,6 +34,14 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "nav_holdings": {"ko": "💼 보유 종목", "zh-TW": "💼 持股"},
     "nav_watchlist": {"ko": "⭐ 관심 종목", "zh-TW": "⭐ 自選股"},
     "nav_history": {"ko": "📜 분석 히스토리", "zh-TW": "📜 分析歷史"},
+    # 추천 종목 sub-nav (세션별)
+    "nav_rec_morning": {"ko": "🌅 morning (장 시작 전)", "zh-TW": "🌅 morning (開盤前)"},
+    "nav_rec_intraday": {"ko": "☀️ intraday (장 중)", "zh-TW": "☀️ intraday (盤中)"},
+    "nav_rec_evening": {"ko": "🌙 evening (장 마감 후)", "zh-TW": "🌙 evening (收盤後)"},
+    # 분석 히스토리 sub-nav (카테고리별)
+    "nav_hist_auto_hold": {"ko": "💼 자동·보유 일일", "zh-TW": "💼 自動·持股每日"},
+    "nav_hist_auto_watch": {"ko": "⭐ 자동·관심 일일", "zh-TW": "⭐ 自動·自選每日"},
+    "nav_hist_manual": {"ko": "👤 수동 분석", "zh-TW": "👤 手動分析"},
     "btn_home": {"ko": "🏠 홈", "zh-TW": "🏠 首頁"},
     "btn_back": {"ko": "← 뒤로", "zh-TW": "← 返回"},
     "btn_recommend_short": {"ko": "🎯 추천", "zh-TW": "🎯 推薦"},
