@@ -77,18 +77,23 @@ def _render_table(records: list[dict]):
         _candle = t("hist_candle_unit")
         analyzed_at_iso = r.get("analyzed_at", "")
 
-        def _fmt_future(p: dict) -> str:
-            pct = (p.get("price", 0) / price_now - 1) * 100 if price_now else 0
+        def _fmt_future(p: dict, ref_price: float, ref_label: str) -> str:
+            """ref_price 대비 % 계산 (ref_label로 어디 대비인지 명시)."""
+            pct = (p.get("price", 0) / ref_price - 1) * 100 if ref_price else 0
             date_str = _cycle_to_date(analyzed_at_iso, p.get("cycle"))
             date_prefix = f"📅 {date_str} · " if date_str else ""
             return (
                 f"{date_prefix}+{p.get('cycle')}{_candle} · {p.get('label', '')} "
-                f"{p.get('price', 0):,.0f} ({pct:+.1f}%)"
+                f"{p.get('price', 0):,.0f} ({ref_label} {pct:+.1f}%)"
             )
 
-        future_1st = _fmt_future(fp[0]) if fp else "-"
-        future_2nd = _fmt_future(fp[1]) if len(fp) >= 2 else "-"
-        future_3rd = _fmt_future(fp[2]) if len(fp) >= 3 else "-"
+        # 1차: 현재가 대비 / 2차(조정): 1차 대비 (음수가 맞음) / 3차: 현재가 대비
+        future_1st = _fmt_future(fp[0], price_now, "현재가") if fp else "-"
+        future_2nd = (
+            _fmt_future(fp[1], fp[0].get("price", price_now), "1차 대비")
+            if len(fp) >= 2 else "-"
+        )
+        future_3rd = _fmt_future(fp[2], price_now, "현재가") if len(fp) >= 3 else "-"
 
         # 수급 verdict (짧게)
         flow_short = flow.get("verdict", "-") or "-"
