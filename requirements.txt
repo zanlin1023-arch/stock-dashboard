@@ -12,3 +12,4 @@ lxml
 supabase
 pykrx
 squarify
+Pillow

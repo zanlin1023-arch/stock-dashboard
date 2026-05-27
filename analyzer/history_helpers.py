@@ -292,7 +292,8 @@ def _render_auto_section(records: list[dict], key_prefix: str,
                 from chart_ichimoku import render_ichimoku_chart
                 chart_path = render_ichimoku_chart(sel_code, sel_name, days=180)
                 if chart_path and chart_path.exists():
-                    st.image(str(chart_path), use_container_width=True)
+                    from common import render_zoomable_image
+                    render_zoomable_image(str(chart_path), alt="일목 차트")
             except Exception as e:
                 st.error(f"{t('hist_chart_fail')}: {e}")
 
@@ -395,7 +396,8 @@ def _render_manual_section(manual_records: list[dict]):
                 from chart_ichimoku import render_ichimoku_chart
                 chart_path = render_ichimoku_chart(sel_code_m, sel_name_m, days=180)
                 if chart_path and chart_path.exists():
-                    st.image(str(chart_path), use_container_width=True)
+                    from common import render_zoomable_image
+                    render_zoomable_image(str(chart_path), alt="일목 차트")
             except Exception as e:
                 st.error(f"{t('hist_chart_fail')}: {e}")
 

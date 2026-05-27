@@ -1,11 +1,73 @@
 """Streamlit 공통: 환경설정 + 비밀번호 인증 + analyzer path."""
 from __future__ import annotations
 
+import base64
 import os
 import sys
 from pathlib import Path
 
 import streamlit as st
+
+
+def render_zoomable_image(image_path, alt: str = "차트"):
+    """확대 가능한 차트 이미지.
+
+    - 호버 시 마우스 위치 중심으로 2.4배 확대 (zoom-in 커서)
+    - 우상단 '🔍 새 탭에서 원본' 버튼: 클릭 시 PNG 원본을 새 탭에서 풀사이즈로
+    """
+    import streamlit.components.v1 as components
+    p = Path(image_path)
+    if not p.exists():
+        st.warning(f"차트 파일 없음: {image_path}")
+        return
+    img_b64 = base64.b64encode(p.read_bytes()).decode()
+    # PNG 비율 → iframe height 동적 계산 (기본 720px width)
+    height = 560
+    try:
+        from PIL import Image
+        with Image.open(p) as im:
+            w, h = im.size
+            height = int(h * (720 / w)) + 30
+    except Exception:
+        pass
+
+    components.html(
+        f"""
+        <style>
+            .zoom-wrap {{
+                position: relative; width: 100%; overflow: hidden;
+                border-radius: 6px; background: #fafafa;
+            }}
+            .zoom-img {{
+                width: 100%; display: block; cursor: zoom-in;
+                transition: transform 0.25s ease;
+                transform-origin: var(--ox, 50%) var(--oy, 50%);
+            }}
+            .zoom-img:hover {{ transform: scale(2.4); }}
+            .zoom-toolbar {{
+                position: absolute; top: 10px; right: 10px; z-index: 10;
+                display: flex; gap: 6px;
+            }}
+            .zoom-btn {{
+                background: rgba(0,0,0,0.7); color: white;
+                padding: 5px 12px; border-radius: 4px;
+                font-size: 0.75rem; text-decoration: none;
+                font-family: -apple-system, "Malgun Gothic", sans-serif;
+            }}
+            .zoom-btn:hover {{ background: rgba(0,0,0,0.9); }}
+        </style>
+        <div class="zoom-wrap">
+            <div class="zoom-toolbar">
+                <a class="zoom-btn" href="data:image/png;base64,{img_b64}" target="_blank">🔍 원본 새 탭</a>
+            </div>
+            <img class="zoom-img" src="data:image/png;base64,{img_b64}" alt="{alt}"
+                 onmousemove="this.style.setProperty('--ox', (event.offsetX / this.offsetWidth * 100) + '%'); this.style.setProperty('--oy', (event.offsetY / this.offsetHeight * 100) + '%');"
+            />
+        </div>
+        """,
+        height=height,
+        scrolling=False,
+    )
 
 
 def setup_environment():

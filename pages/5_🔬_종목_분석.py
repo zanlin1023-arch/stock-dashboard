@@ -202,7 +202,8 @@ if analyze_btn and query:
     # 일목 차트
     st.subheader(t("ichimoku_chart"))
     if chart_path and chart_path.exists():
-        st.image(str(chart_path), use_container_width=True)
+        from common import render_zoomable_image
+        render_zoomable_image(str(chart_path), alt="일목 차트")
     else:
         st.warning(t("chart_failed"))
 
