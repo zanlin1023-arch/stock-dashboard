@@ -117,19 +117,14 @@ def classify_horizon(signals: list, change_pct=None) -> tuple[str, int, int]:
 # 강세 테마 집계
 # ──────────────────────────────────────────
 def compute_hot_themes(recs: list[dict], top_n: int = 5) -> list[dict]:
-    """추천 종목들의 sector_name 집계 → 강세 테마 상위 N개.
-
-    Returns:
-        [{"theme": str, "count": int, "avg_change": float, "stocks": [name, ...]}, ...]
-    """
+    """추천 종목들의 sector 집계 → 강세 테마 상위 N개 (DART 업종 우선)."""
     from collections import defaultdict
     bucket: dict[str, dict] = defaultdict(lambda: {"changes": [], "stocks": []})
     for r in recs:
-        # 페이지에서 sector_name이 별도 컬럼 없으면 _peer_data로 가져와야 함
         code = r.get("stock_code")
         if not code:
             continue
-        sector_name = _peer_data(code, max_peers=1).get("sector_name") or ""
+        sector_name = _resolve_sector(code)
         if not sector_name:
             continue
         try:
@@ -221,6 +216,24 @@ def render_hot_themes(recs: list[dict]):
         f"</div>",
         unsafe_allow_html=True,
     )
+
+
+# ──────────────────────────────────────────
+# 섹터 해석 (DART 우선 → peer fallback)
+# ──────────────────────────────────────────
+def _resolve_sector(code: str) -> str:
+    """종목 sector 결정: DART 업종명 우선, 없으면 peer_data fallback."""
+    try:
+        from analyzer.stock_meta_dart import get_sector as _dart_sector
+        s = _dart_sector(code)
+        if s:
+            return s
+    except Exception:
+        pass
+    try:
+        return _peer_data(code, max_peers=1).get("sector_name") or ""
+    except Exception:
+        return ""
 
 
 # ──────────────────────────────────────────
@@ -571,7 +584,7 @@ def render_recommendations_table(recs: list[dict], session: str):
         code = r.get("stock_code")
         sig = r.get("signals") or []
         h_key, _, _ = classify_horizon(sig, change_pct=r.get("change_pct"))
-        sector = _peer_data(code, max_peers=1).get("sector_name") or ""
+        sector = _resolve_sector(code)
         try:
             chg = float(r.get("change_pct") or 0)
         except (TypeError, ValueError):
@@ -660,7 +673,13 @@ def _render_stock_detail(stock: dict, session: str):
     inst_5d = stock.get("inst_5d") or 0
     signals = stock.get("signals") or []
     h_key, short_score, long_score = classify_horizon(signals, change_pct=change_pct)
-    sector = _peer_data(code, max_peers=1).get("sector_name") or t("rec_card_no_theme")
+    sector = _resolve_sector(code) or t("rec_card_no_theme")
+    # DART 회사 정보 (sector 외 추가 메타)
+    try:
+        from analyzer.stock_meta_dart import get_company_info
+        company = get_company_info(code) or {}
+    except Exception:
+        company = {}
     won = t("rec_unit_won")
     eok = t("rec_unit_eok")
 
@@ -699,6 +718,30 @@ def _render_stock_detail(stock: dict, session: str):
             if st.button(t("rec_card_detail"), key=f"detail_btn_{session}_{code}", use_container_width=True):
                 st.session_state["last_query"] = name
                 st.switch_page("app.py")
+
+        # DART 회사 정보 (있을 때만)
+        if company:
+            info_parts = []
+            if company.get("ceo"):
+                info_parts.append(f"👤 {company['ceo']}")
+            if company.get("est_date") and len(company["est_date"]) == 8:
+                d = company["est_date"]
+                info_parts.append(f"📅 {d[:4]}.{d[4:6]}.{d[6:]} 설립")
+            if company.get("homepage"):
+                hp = company["homepage"]
+                info_parts.append(f"🌐 <a href='{hp}' target='_blank' style='color:#1B6FB0;'>{hp.replace('http://', '').replace('https://', '').rstrip('/')[:40]}</a>")
+            info_line = " · ".join(info_parts) if info_parts else ""
+            company_name = company.get("company_name", name)
+            st.markdown(
+                f"<div style='margin-top:6px;padding:10px 14px;border-radius:8px;"
+                f"background:#F0F7FF;border-left:4px solid #1B6FB0;'>"
+                f"<div style='font-weight:700;color:#1B6FB0;margin-bottom:3px;'>"
+                f"🏢 회사 정보</div>"
+                f"<div style='font-size:0.88rem;color:#333;'><strong>{company_name}</strong> · {sector}</div>"
+                + (f"<div style='font-size:0.78rem;color:#666;margin-top:2px;'>{info_line}</div>" if info_line else "")
+                + "</div>",
+                unsafe_allow_html=True,
+            )
 
         # 추천 이유 (전체)
         st.markdown(
