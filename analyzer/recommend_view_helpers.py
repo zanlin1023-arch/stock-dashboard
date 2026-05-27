@@ -534,20 +534,35 @@ def render_recommendations_table(recs: list[dict], session: str):
         code = r.get("stock_code")
         sig = r.get("signals") or []
         h_key, _, _ = classify_horizon(sig, change_pct=r.get("change_pct"))
-        sector = _peer_data(code, max_peers=1).get("sector_name") or "-"
+        sector = _peer_data(code, max_peers=1).get("sector_name") or ""
         try:
             chg = float(r.get("change_pct") or 0)
         except (TypeError, ValueError):
             chg = 0
-        # 핵심 이유: 첫 2개만
-        key_reasons = " · ".join(str(s) for s in sig[:2]) if sig else "-"
+        # 핵심 이유: 첫 2개만, 없으면 "데이터 부족" 표시
+        if sig:
+            key_reasons = " · ".join(str(s) for s in sig[:2])
+        else:
+            # signals 없는 종목 — 등락률 + 외인/기관 기반 fallback
+            fb_parts = []
+            if chg >= 5:
+                fb_parts.append(f"📈 당일 +{chg:.1f}%")
+            elif chg <= -3:
+                fb_parts.append(f"📉 당일 {chg:.1f}%")
+            f5 = int(r.get("foreign_5d") or 0)
+            i5 = int(r.get("inst_5d") or 0)
+            if f5 > 0:
+                fb_parts.append(f"외인 +{f5}억")
+            if i5 > 0:
+                fb_parts.append(f"기관 +{i5}억")
+            key_reasons = " · ".join(fb_parts) if fb_parts else f"⚠ {t('rec_card_no_reasons')}"
         tier = r.get("tier", "")
         rows.append({
             "_tier_order": {"large": 0, "mid": 1, "small": 2}.get(tier, 3),
             _c_rank: r.get("rank_in_tier", 0),
             _c_stock: f"{r.get('stock_name', '')} ({code})",
             _c_tier: tier_short.get(tier, tier),
-            _c_theme: sector,
+            _c_theme: sector or "—",
             _c_price: int(float(r.get("price") or 0)) if r.get("price") else 0,
             _c_change: chg,
             _c_score: int(r.get("score") or 0),
@@ -559,7 +574,8 @@ def render_recommendations_table(recs: list[dict], session: str):
 
     df = pd.DataFrame(rows).sort_values(["_tier_order", _c_rank]).drop("_tier_order", axis=1).reset_index(drop=True)
 
-    st.dataframe(
+    # 행 클릭 → 선택 → 아래에 상세 펼침
+    event = st.dataframe(
         df,
         use_container_width=True,
         hide_index=True,
@@ -570,19 +586,29 @@ def render_recommendations_table(recs: list[dict], session: str):
             _c_foreign: st.column_config.NumberColumn(format="%+d 억"),
             _c_inst: st.column_config.NumberColumn(format="%+d 억"),
         },
+        on_select="rerun",
+        selection_mode="single-row",
+        key=f"rec_{session}_table",
     )
 
-    st.caption(f"💡 {t('rec_horizon_hint')}")
+    st.caption(f"💡 {t('rec_horizon_hint')} · {t('rec_detail_select')}")
 
-    # 종목 선택 → 상세 펼침
-    st.markdown("---")
-    options = ["—"] + [f"{r.get('stock_name', '')} ({r.get('stock_code', '')})" for r in recs]
-    sel = st.selectbox(t("rec_detail_select"), options, key=f"rec_{session}_detail_sel")
-    if sel and sel != "—":
-        sel_code = sel.split("(")[-1].rstrip(")")
-        sel_rec = next((r for r in recs if r.get("stock_code") == sel_code), None)
-        if sel_rec:
-            _render_stock_detail(sel_rec, session)
+    # 선택된 행 → 상세 펼침
+    sel_rec = None
+    try:
+        sel_rows = event.selection.rows  # type: ignore[attr-defined]
+    except Exception:
+        sel_rows = []
+    if sel_rows:
+        sel_idx = sel_rows[0]
+        if 0 <= sel_idx < len(df):
+            sel_label = df.iloc[sel_idx][_c_stock]
+            sel_code = sel_label.split("(")[-1].rstrip(")")
+            sel_rec = next((r for r in recs if r.get("stock_code") == sel_code), None)
+
+    if sel_rec:
+        st.markdown("---")
+        _render_stock_detail(sel_rec, session)
 
 
 def _render_stock_detail(stock: dict, session: str):
