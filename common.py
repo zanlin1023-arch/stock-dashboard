@@ -43,7 +43,8 @@ def render_zoomable_image(image_path, alt: str = "차트"):
                 transition: transform 0.25s ease;
                 transform-origin: var(--ox, 50%) var(--oy, 50%);
             }}
-            .zoom-img:hover {{ transform: scale(2.4); }}
+            /* 클릭 시 토글: zoomed 클래스가 있을 때만 확대 */
+            .zoom-img.zoomed {{ transform: scale(2.4); cursor: zoom-out; }}
             .zoom-toolbar {{
                 position: absolute; top: 10px; right: 10px; z-index: 10;
                 display: flex; gap: 6px;
@@ -55,14 +56,23 @@ def render_zoomable_image(image_path, alt: str = "차트"):
                 font-family: -apple-system, "Malgun Gothic", sans-serif;
             }}
             .zoom-btn:hover {{ background: rgba(0,0,0,0.9); }}
+            .zoom-hint {{
+                position: absolute; bottom: 10px; left: 10px;
+                background: rgba(0,0,0,0.55); color: #fff;
+                padding: 4px 10px; border-radius: 4px;
+                font-size: 0.72rem; pointer-events: none;
+                font-family: -apple-system, "Malgun Gothic", sans-serif;
+            }}
         </style>
         <div class="zoom-wrap">
             <div class="zoom-toolbar">
                 <a class="zoom-btn" href="data:image/png;base64,{img_b64}" target="_blank">🔍 원본 새 탭</a>
             </div>
-            <img class="zoom-img" src="data:image/png;base64,{img_b64}" alt="{alt}"
-                 onmousemove="this.style.setProperty('--ox', (event.offsetX / this.offsetWidth * 100) + '%'); this.style.setProperty('--oy', (event.offsetY / this.offsetHeight * 100) + '%');"
+            <img id="zimg" class="zoom-img" src="data:image/png;base64,{img_b64}" alt="{alt}"
+                 onmousemove="if(this.classList.contains('zoomed')) return; this.style.setProperty('--ox', (event.offsetX / this.offsetWidth * 100) + '%'); this.style.setProperty('--oy', (event.offsetY / this.offsetHeight * 100) + '%');"
+                 onclick="this.style.setProperty('--ox', (event.offsetX / this.offsetWidth * 100) + '%'); this.style.setProperty('--oy', (event.offsetY / this.offsetHeight * 100) + '%'); this.classList.toggle('zoomed');"
             />
+            <div class="zoom-hint">💡 차트 클릭 → 확대 / 다시 클릭 → 원래 크기</div>
         </div>
         """,
         height=height,
