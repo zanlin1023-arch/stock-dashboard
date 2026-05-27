@@ -93,6 +93,13 @@ def _render_table(records: list[dict]):
         # 수급 verdict (짧게)
         flow_short = flow.get("verdict", "-") or "-"
 
+        # 일목 V/N/E 목표가 + 손절 (현재가 대비 % 함께)
+        def _fmt_target(val):
+            if not val:
+                return "-"
+            pct = (float(val) / price_now - 1) * 100 if price_now else 0
+            return f"{float(val):,.0f} ({pct:+.1f}%)"
+
         rows.append({
             t("hist_col_analyzed_at"): _to_kst_str(r.get("analyzed_at", ""), with_label=False),
             t("hist_col_stock"): f"{r.get('stock_name', '')} ({r.get('stock_code', '')})",
@@ -108,8 +115,10 @@ def _render_table(records: list[dict]):
             t("hist_col_future_2nd"): future_2nd,
             t("hist_col_future_3rd"): future_3rd,
             t("hist_col_flow"): flow_short,
-            t("hist_col_target_n"): f"{r['target_n']:,.0f}" if r.get("target_n") else "-",
-            t("hist_col_stop"): f"{r['stop_loss']:,.0f}" if r.get("stop_loss") else "-",
+            t("hist_col_target_v"): _fmt_target(r.get("target_v")),
+            t("hist_col_target_n"): _fmt_target(r.get("target_n")),
+            t("hist_col_target_e"): _fmt_target(r.get("target_e")),
+            t("hist_col_stop"): _fmt_target(r.get("stop_loss")),
         })
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 

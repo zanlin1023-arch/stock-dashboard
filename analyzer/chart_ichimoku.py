@@ -583,7 +583,19 @@ def render_ichimoku_chart(
         [(k, targets[k]) for k in ["V", "N", "E"]],
         key=lambda x: x[1], reverse=True,
     )
-    y_top = ax_main.get_ylim()[1]
+
+    # y축 자동 확장: V/N/E + 손절이 모두 차트 안에 들어오도록 (사용자 요청)
+    y_bottom, y_top = ax_main.get_ylim()
+    extreme_top = max([v for _, v in sorted_targets] + [y_top])
+    extreme_bot_candidates = [v for _, v in sorted_targets] + [y_bottom]
+    if decision.get("stop"):
+        extreme_top = max(extreme_top, decision["stop"][1])
+        extreme_bot_candidates.append(decision["stop"][1])
+    extreme_bot = min(extreme_bot_candidates)
+    new_top = extreme_top * 1.05 if extreme_top > y_top else y_top
+    new_bot = extreme_bot * 0.95 if extreme_bot < y_bottom else y_bottom
+    ax_main.set_ylim(new_bot, new_top)
+    y_top = new_top
     for k, v in sorted_targets:
         meta = target_meta[k]
         pct = (v / current_price - 1) * 100
