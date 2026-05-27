@@ -665,28 +665,22 @@ def render_ichimoku_chart(
     ax_main.axhline(marker_y, color="#DDD", linewidth=0.5, alpha=0.5,
                    xmin=0, xmax=1)
 
-    # future_path를 미리 계산 (cycle → 가격/라벨 매핑) → 마커 라벨에 가격 표시
-    _fp_preview = project_future_path(
-        current_price, cycles, targets, stop=decision.get("stop"),
-    ) or []
-    _fp_map = {p["cycle"]: p for p in _fp_preview}
+    # 시간 사이클 마커는 '시간 정보만' (일목 시간론 원리)
+    # 가격 예측은 패턴 매칭 (파란 영역) + 우측 V/N/E 라벨로 통일 → 충돌 방지
 
     for cyc in cycles:
         rel_idx = cyc["target_idx"] - plot_base_idx
         if 0 <= rel_idx < n_total:
             color = cycle_colors[cyc["cycle"]]
             is_future = cyc["is_future"]
-            # 과거(이미 지남)는 회색 처리, 미래는 진한 색
             fill_color = color if is_future else "#BBB"
             edge_color = color
             alpha_val = 1.0 if is_future else 0.5
 
-            # 큰 ▼ 마커 (하단)
             ax_main.scatter([rel_idx], [marker_y],
                           marker="v", color=fill_color, s=220, zorder=6,
                           edgecolors=edge_color, linewidths=2.0, alpha=alpha_val)
 
-            # 봉 수 (큰 글씨)
             ax_main.text(
                 rel_idx, marker_y,
                 f"{cyc['cycle']}",
@@ -694,16 +688,11 @@ def render_ichimoku_chart(
                 color="white", fontweight="bold",
             )
 
-            # 라벨: 날짜 + 봉수 + 예상 가격 (미래 사이클만)
+            # 라벨: 봉수 + 날짜만 (가격 X — 두 예측 로직 충돌 방지)
             label_date = extended.index[rel_idx].strftime("%m/%d")
             label_text = f"{cyc['cycle']}봉\n{label_date}"
             if is_future:
                 label_text = f"▼ {label_text}"
-                fp_info = _fp_map.get(cyc["cycle"])
-                if fp_info:
-                    price_val = fp_info["price"]
-                    pct_now = (price_val / current_price - 1) * 100 if current_price else 0
-                    label_text += f"\n{price_val:,.0f}\n({fp_info['label']})"
 
             ax_main.text(
                 rel_idx, label_y,
