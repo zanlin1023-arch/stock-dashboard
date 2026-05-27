@@ -105,6 +105,7 @@ def _render_table(records: list[dict]):
             pct = (float(val) / price_now - 1) * 100 if price_now else 0
             return f"{float(val):,.0f} ({pct:+.1f}%)"
 
+        # 일목 가격 그룹 (V/N/E) → 일목 시간 사이클 그룹 (1차/2차/3차) 인접 배치
         rows.append({
             t("hist_col_analyzed_at"): _to_kst_str(r.get("analyzed_at", ""), with_label=False),
             t("hist_col_stock"): f"{r.get('stock_name', '')} ({r.get('stock_code', '')})",
@@ -116,14 +117,16 @@ def _render_table(records: list[dict]):
                 "inside": t("hist_cloud_inside"),
             }.get(r.get("cloud_position", ""), "-"),
             t("hist_col_decision"): r.get("decision_action", "-") or "-",
-            t("hist_col_future_1st"): future_1st,
-            t("hist_col_future_2nd"): future_2nd,
-            t("hist_col_future_3rd"): future_3rd,
-            t("hist_col_flow"): flow_short,
+            # 일목 가격 (시간 무관 목표가)
             t("hist_col_target_v"): _fmt_target(r.get("target_v")),
             t("hist_col_target_n"): _fmt_target(r.get("target_n")),
             t("hist_col_target_e"): _fmt_target(r.get("target_e")),
+            # 일목 시간 사이클 (V/N/E를 시간에 매핑)
+            t("hist_col_future_1st"): future_1st,
+            t("hist_col_future_2nd"): future_2nd,
+            t("hist_col_future_3rd"): future_3rd,
             t("hist_col_stop"): _fmt_target(r.get("stop_loss")),
+            t("hist_col_flow"): flow_short,
         })
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 

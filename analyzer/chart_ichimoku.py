@@ -665,6 +665,12 @@ def render_ichimoku_chart(
     ax_main.axhline(marker_y, color="#DDD", linewidth=0.5, alpha=0.5,
                    xmin=0, xmax=1)
 
+    # future_path를 미리 계산 (cycle → 가격/라벨 매핑) → 마커 라벨에 가격 표시
+    _fp_preview = project_future_path(
+        current_price, cycles, targets, stop=decision.get("stop"),
+    ) or []
+    _fp_map = {p["cycle"]: p for p in _fp_preview}
+
     for cyc in cycles:
         rel_idx = cyc["target_idx"] - plot_base_idx
         if 0 <= rel_idx < n_total:
@@ -688,11 +694,16 @@ def render_ichimoku_chart(
                 color="white", fontweight="bold",
             )
 
-            # 라벨: 날짜 + 봉수 (마커 위)
+            # 라벨: 날짜 + 봉수 + 예상 가격 (미래 사이클만)
             label_date = extended.index[rel_idx].strftime("%m/%d")
             label_text = f"{cyc['cycle']}봉\n{label_date}"
             if is_future:
                 label_text = f"▼ {label_text}"
+                fp_info = _fp_map.get(cyc["cycle"])
+                if fp_info:
+                    price_val = fp_info["price"]
+                    pct_now = (price_val / current_price - 1) * 100 if current_price else 0
+                    label_text += f"\n{price_val:,.0f}\n({fp_info['label']})"
 
             ax_main.text(
                 rel_idx, label_y,
