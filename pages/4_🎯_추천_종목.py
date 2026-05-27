@@ -80,9 +80,9 @@ for col, (emoji, sess_id, sh, sm, desc) in zip(sess_cols, session_schedule):
         hours = delta.seconds // 3600
         minutes = (delta.seconds % 3600) // 60
         if hours > 0:
-            status = f"⏳ {hours}시간 {minutes}분 후"
+            status = t("rec_time_hours_min_later").format(h=hours, m=minutes)
         else:
-            status = f"⏳ {minutes}분 후"
+            status = t("rec_time_min_later").format(m=minutes)
         bg, border, fg = "#F0F4FF", "#5DADE2", "#1B6FB0"
 
     with col:
@@ -136,19 +136,14 @@ with cc3:
 # 데이터 조회
 # ──────────────────────────────────────────
 if not target_date:
-    st.info(
-        "💡 아직 저장된 추천이 없습니다. 매일 평일 다음 시각에 자동 분석됩니다:\n\n"
-        "- 🌅 **08:00 KST** — 장 시작 전 (morning)\n"
-        "- ☀️ **14:00 KST** — 장 중 (intraday)\n"
-        "- 🌙 **21:00 KST** — NXT 마감 후 (evening)"
-    )
+    st.info(t("rec_intro_no_recs"))
     st.stop()
 
 
 recs = db.list_recommendations(target_date=target_date, session=sel_session)
 
 if not recs:
-    st.warning(f"📅 {target_date} ({sel_session or '전체'}) — 저장된 추천 없음")
+    st.warning(f"📅 {target_date} ({sel_session or t('rec_session_all')}) — {t('rec_no_saved_for_date')}")
     st.stop()
 
 
@@ -159,9 +154,9 @@ total = len(recs)
 sessions_in_data = sorted({r.get("session") for r in recs if r.get("session")})
 
 sc1, sc2, sc3, sc4 = st.columns(4)
-sc1.metric("📅 추천 일자", target_date)
-sc2.metric("📊 총 추천", f"{total}건")
-sc3.metric("⏰ 세션", ", ".join(sessions_in_data) or "-")
+sc1.metric(t("rec_date"), target_date)
+sc2.metric(t("rec_total"), f"{total}{t('rec_unit_count')}")
+sc3.metric(t("rec_session_count"), ", ".join(sessions_in_data) or "-")
 # UTC → KST 변환
 from datetime import datetime as _dt, timezone as _tz, timedelta as _td
 _KST = _tz(_td(hours=9))
@@ -176,7 +171,7 @@ def _to_kst(s: str) -> str:
     except Exception:
         return s[:19].replace("T", " ")
 recommended_at = _to_kst(recs[0].get("recommended_at", ""))
-sc4.metric("🕐 분석 시각 (KST)", recommended_at)
+sc4.metric(t("rec_analyzed_at_kst"), recommended_at)
 
 
 # ──────────────────────────────────────────
@@ -184,8 +179,8 @@ sc4.metric("🕐 분석 시각 (KST)", recommended_at)
 # ──────────────────────────────────────────
 if st.session_state.get("show_trend"):
     st.divider()
-    st.subheader("📊 7일 추천 종목 추이")
-    st.caption("최근 7일간 어떤 종목이 자주 추천됐는지 + 신규/탈락 종목")
+    st.subheader(t("rec_7d_trend_title"))
+    st.caption(t("rec_7d_trend_caption"))
 
     # 최근 7일 데이터 수집
     recent_dates = saved_dates[:7]
@@ -215,16 +210,16 @@ if st.session_state.get("show_trend"):
         rows = []
         for code, info in ranked[:20]:
             rows.append({
-                "종목": f"{info['name']} ({code})",
-                "등장 횟수": f"{len(info['appearances'])}/{len(recent_dates)}일",
-                "최고 점수": max(info["scores"], default=0),
-                "Tier": ", ".join(sorted(info["tiers"])),
-                "최근 등장": max(info["appearances"]),
+                t("rec_7d_col_stock"): f"{info['name']} ({code})",
+                t("rec_7d_col_appear"): t("rec_7d_appear_format").format(n=len(info['appearances']), total=len(recent_dates)),
+                t("rec_7d_col_max_score"): max(info["scores"], default=0),
+                t("rec_7d_col_tier"): ", ".join(sorted(info["tiers"])),
+                t("rec_7d_col_last"): max(info["appearances"]),
             })
         import pandas as pd
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
     else:
-        st.info("7일치 데이터 부족")
+        st.info(t("rec_7d_insufficient"))
 
 
 # ──────────────────────────────────────────
@@ -268,57 +263,85 @@ def _stock_card(stock: dict, mode: str = "view"):
     signals = stock.get("signals") or []
     rank = stock.get("rank_in_tier", 0)
 
+    # 섹터/테마 (캐시된 _peer_data 사용)
+    sector_name = ""
+    try:
+        sec = _peer_data(code, max_peers=1)
+        sector_name = sec.get("sector_name") or ""
+    except Exception:
+        pass
+
+    won = t("rec_unit_won")
+    eok = t("rec_unit_eok")
+
     with st.container(border=True):
         hc1, hc2, hc3 = st.columns([3, 2, 2])
         with hc1:
             st.markdown(f"### #{rank}  {name}  `{code}`")
+            theme_label = sector_name or t("rec_card_no_theme")
+            st.markdown(
+                f"<div style='display:inline-block;padding:2px 10px;border-radius:10px;"
+                f"background:#EEF3FB;color:#1B6FB0;font-size:0.85rem;font-weight:600;'>"
+                f"{t('rec_card_theme')}: {theme_label}</div>",
+                unsafe_allow_html=True,
+            )
         with hc2:
             cs = f"{float(change_pct):+.2f}%" if change_pct else None
-            st.metric("현재가", f"{int(float(price)):,}원" if price else "-", cs)
+            st.metric(t("rec_card_price"), f"{int(float(price)):,}{won}" if price else "-", cs)
         with hc3:
-            st.metric("추천 점수", f"{int(score):+}")
+            st.metric(t("rec_card_score"), f"{int(score):+}")
 
         dc1, dc2, dc3, dc4 = st.columns(4)
         with dc1:
-            st.metric("시가총액", f"{int(market_cap):,}억" if market_cap else "-")
+            st.metric(t("rec_card_marketcap"), f"{int(market_cap):,}{eok}" if market_cap else "-")
         with dc2:
             f_color = "🟢" if foreign_5d > 0 else ("🔴" if foreign_5d < 0 else "⚪")
-            st.metric("외인 5일", f"{f_color} {int(foreign_5d):+,}억" if foreign_5d else "-")
+            st.metric(t("rec_card_foreign5d"), f"{f_color} {int(foreign_5d):+,}{eok}" if foreign_5d else "-")
         with dc3:
             i_color = "🟢" if inst_5d > 0 else ("🔴" if inst_5d < 0 else "⚪")
-            st.metric("기관 5일", f"{i_color} {int(inst_5d):+,}억" if inst_5d else "-")
+            st.metric(t("rec_card_inst5d"), f"{i_color} {int(inst_5d):+,}{eok}" if inst_5d else "-")
         with dc4:
-            if st.button("🔬 상세 분석", key=f"a_{mode}_{code}_{rank}", use_container_width=True):
+            if st.button(t("rec_card_detail"), key=f"a_{mode}_{code}_{rank}", use_container_width=True):
                 st.session_state["last_query"] = name
                 st.switch_page("app.py")
 
-        if signals:
-            with st.expander(f"📊 시그널 {len(signals)}개"):
-                for sig in signals[:5]:
-                    st.markdown(f"- {sig}")
+        # 추천 이유 (signals) — expander 없이 펼친 상태로 노출
+        st.markdown(
+            f"<div style='margin-top:8px;padding:10px 14px;border-radius:8px;"
+            f"background:#FFF9E6;border-left:4px solid #F1C40F;'>"
+            f"<div style='font-weight:700;color:#7A5C00;margin-bottom:4px;'>{t('rec_card_reasons')}</div>"
+            + (
+                "<ul style='margin:0;padding-left:20px;color:#5A4500;'>"
+                + "".join(f"<li>{sig}</li>" for sig in signals)
+                + "</ul>"
+                if signals
+                else f"<div style='color:#8A7000;'>{t('rec_card_no_reasons')}</div>"
+            )
+            + "</div>",
+            unsafe_allow_html=True,
+        )
 
         # ───── 섹터 + 관련주 비교 (지연 로딩 — expander 펼칠 때만 호출) ─────
         with st.expander(t("rec_sector_compare"), expanded=False):
-            sec = _peer_data(code, max_peers=6)
-            peers = sec.get("peers") or []
-            sector_label = sec.get("sector_name") or "동종업종"
+            sec_full = _peer_data(code, max_peers=6)
+            peers = sec_full.get("peers") or []
+            sector_label = sec_full.get("sector_name") or t("rec_card_no_theme")
             if not peers:
-                st.caption("ℹ️ 동종업종 데이터를 가져올 수 없습니다.")
+                st.caption(t("rec_peer_unavailable"))
             else:
-                st.caption(f"📂 **{sector_label}** · 관련주 상위 {len(peers)}개")
+                st.caption(t("rec_peer_top").format(sector=sector_label, n=len(peers)))
                 import pandas as pd
                 rows = []
                 for p in peers:
                     is_self = p["code"] == code
                     rows.append({
-                        "비교": "👈 본인" if is_self else "",
-                        "종목": f"{p['name']} ({p['code']})",
-                        "현재가": f"{int(p['price']):,}" if p.get("price") else "-",
-                        "등락률": f"{p['change_pct']:+.2f}%",
+                        t("rec_peer_col_compare"): t("rec_peer_col_self") if is_self else "",
+                        t("rec_peer_col_stock"): f"{p['name']} ({p['code']})",
+                        t("rec_peer_col_price"): f"{int(p['price']):,}" if p.get("price") else "-",
+                        t("rec_peer_col_change"): f"{p['change_pct']:+.2f}%",
                     })
                 st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-                # 섹터 평균 등락률
                 avg = sum(p["change_pct"] for p in peers) / len(peers)
                 self_chg = next(
                     (p["change_pct"] for p in peers if p["code"] == code),
@@ -328,28 +351,32 @@ def _stock_card(stock: dict, mode: str = "view"):
                 if self_chg is not None:
                     diff = self_chg - avg
                     rel_msg = (
-                        f" · 본인 <strong>{self_chg:+.2f}%</strong> "
-                        f"(섹터 대비 <strong style='color:{sec_color};'>{diff:+.2f}%p</strong>)"
+                        f" · {t('rec_peer_self_vs_sector')} <strong>{self_chg:+.2f}%</strong> "
+                        f"({t('rec_peer_sector_diff')} <strong style='color:{sec_color};'>{diff:+.2f}%p</strong>)"
                     )
                 else:
                     rel_msg = ""
                 st.markdown(
                     f"<div style='padding:6px 10px;border-radius:6px;background:{sec_color}10;"
                     f"border-left:3px solid {sec_color};font-size:0.85rem;'>"
-                    f"📊 섹터 평균 등락률 <strong style='color:{sec_color};'>{avg:+.2f}%</strong>"
+                    f"{t('rec_peer_sector_avg')} <strong style='color:{sec_color};'>{avg:+.2f}%</strong>"
                     f"{rel_msg}</div>",
                     unsafe_allow_html=True,
                 )
 
 
 tier_meta = {
-    "large": ("🏛 대형주", "시총 5조원 이상"),
-    "mid": ("🏢 중형주", "5천억 ~ 5조원"),
-    "small": ("🏠 소형주", "1천억 ~ 5천억원"),
+    "large": (t("tier_large"), t("tier_large_desc")),
+    "mid": (t("tier_mid"), t("tier_mid_desc")),
+    "small": (t("tier_small"), t("tier_small_desc")),
 }
 
 session_emoji = {"morning": "🌅", "intraday": "☀️", "evening": "🌙"}
-session_label_kr = {"morning": "장 시작 전", "intraday": "장 중", "evening": "장 마감 후"}
+session_label_kr = {
+    "morning": t("rec_session_label_morning"),
+    "intraday": t("rec_session_label_intraday"),
+    "evening": t("rec_session_label_evening"),
+}
 
 for sess in sorted(by_session.keys()):
     sess_data = by_session[sess]
@@ -376,7 +403,4 @@ for sess in sorted(by_session.keys()):
 # 푸터
 # ──────────────────────────────────────────
 st.divider()
-st.caption(
-    "⚡ DB 즉시 조회 모드 · "
-    "매일 평일 자동 분석 (GitHub Actions): 🌅 08:00 / ☀️ 14:00 / 🌙 21:00 KST"
-)
+st.caption(t("rec_footer"))

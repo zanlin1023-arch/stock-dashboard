@@ -344,6 +344,58 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "rec_sector_compare": {"ko": "🏢 섹터 · 관련주 비교", "zh-TW": "🏢 產業·相關股比較"},
 
     # ════════════════════════════════
+    # 추천 카드 — 라벨 / 단위 / 메시지
+    # ════════════════════════════════
+    "rec_card_price": {"ko": "현재가", "zh-TW": "現價"},
+    "rec_card_score": {"ko": "추천 점수", "zh-TW": "推薦分數"},
+    "rec_card_marketcap": {"ko": "시가총액", "zh-TW": "市值"},
+    "rec_card_foreign5d": {"ko": "외인 5일", "zh-TW": "外資5日"},
+    "rec_card_inst5d": {"ko": "기관 5일", "zh-TW": "機構5日"},
+    "rec_card_detail": {"ko": "🔬 상세 분석", "zh-TW": "🔬 詳細分析"},
+    "rec_card_theme": {"ko": "📂 테마/섹터", "zh-TW": "📂 主題/產業"},
+    "rec_card_reasons": {"ko": "💡 추천 이유", "zh-TW": "💡 推薦理由"},
+    "rec_card_no_theme": {"ko": "섹터 정보 없음", "zh-TW": "無產業資訊"},
+    "rec_card_no_reasons": {"ko": "특이 시그널 없음", "zh-TW": "無特殊訊號"},
+    "rec_unit_won": {"ko": "원", "zh-TW": "元"},
+    "rec_unit_eok": {"ko": "억", "zh-TW": "億"},
+    "rec_unit_count": {"ko": "건", "zh-TW": "筆"},
+    "rec_no_saved_for_date": {"ko": "저장된 추천 없음", "zh-TW": "無已儲存推薦"},
+    "rec_session_all": {"ko": "전체", "zh-TW": "全部"},
+    "rec_time_hours_min_later": {"ko": "⏳ {h}시간 {m}분 후", "zh-TW": "⏳ {h}小時{m}分後"},
+    "rec_time_min_later": {"ko": "⏳ {m}분 후", "zh-TW": "⏳ {m}分後"},
+    "rec_intro_no_recs": {
+        "ko": "💡 아직 저장된 추천이 없습니다. 매일 평일 다음 시각에 자동 분석됩니다:\n\n- 🌅 **08:00 KST** — 장 시작 전 (morning)\n- ☀️ **14:00 KST** — 장 중 (intraday)\n- 🌙 **21:00 KST** — NXT 마감 후 (evening)",
+        "zh-TW": "💡 尚無已儲存的推薦。每個工作日將於以下時間自動分析:\n\n- 🌅 **08:00 KST** — 開盤前 (morning)\n- ☀️ **14:00 KST** — 盤中 (intraday)\n- 🌙 **21:00 KST** — NXT 收盤後 (evening)",
+    },
+    "rec_analyzed_at_kst": {"ko": "🕐 분석 시각 (KST)", "zh-TW": "🕐 分析時間 (KST)"},
+    "rec_7d_trend_title": {"ko": "📊 7일 추천 종목 추이", "zh-TW": "📊 7日推薦個股趨勢"},
+    "rec_7d_trend_caption": {"ko": "최근 7일간 어떤 종목이 자주 추천됐는지 + 신규/탈락 종목", "zh-TW": "最近7日內哪些個股經常被推薦 + 新進/淘汰"},
+    "rec_7d_col_stock": {"ko": "종목", "zh-TW": "個股"},
+    "rec_7d_col_appear": {"ko": "등장 횟수", "zh-TW": "出現次數"},
+    "rec_7d_col_max_score": {"ko": "최고 점수", "zh-TW": "最高分"},
+    "rec_7d_col_tier": {"ko": "Tier", "zh-TW": "階層"},
+    "rec_7d_col_last": {"ko": "최근 등장", "zh-TW": "最近出現"},
+    "rec_7d_appear_format": {"ko": "{n}/{total}일", "zh-TW": "{n}/{total}日"},
+    "rec_7d_insufficient": {"ko": "7일치 데이터 부족", "zh-TW": "7日資料不足"},
+    "rec_peer_unavailable": {"ko": "ℹ️ 동종업종 데이터를 가져올 수 없습니다.", "zh-TW": "ℹ️ 無法取得同產業資料。"},
+    "rec_peer_top": {"ko": "📂 **{sector}** · 관련주 상위 {n}개", "zh-TW": "📂 **{sector}** · 相關股前 {n} 檔"},
+    "rec_peer_col_compare": {"ko": "비교", "zh-TW": "比較"},
+    "rec_peer_col_self": {"ko": "👈 본인", "zh-TW": "👈 本檔"},
+    "rec_peer_col_stock": {"ko": "종목", "zh-TW": "個股"},
+    "rec_peer_col_price": {"ko": "현재가", "zh-TW": "現價"},
+    "rec_peer_col_change": {"ko": "등락률", "zh-TW": "漲跌幅"},
+    "rec_peer_sector_avg": {"ko": "📊 섹터 평균 등락률", "zh-TW": "📊 產業平均漲跌幅"},
+    "rec_peer_self_vs_sector": {"ko": "본인", "zh-TW": "本檔"},
+    "rec_peer_sector_diff": {"ko": "섹터 대비", "zh-TW": "與產業比"},
+    "rec_session_label_morning": {"ko": "장 시작 전", "zh-TW": "開盤前"},
+    "rec_session_label_intraday": {"ko": "장 중", "zh-TW": "盤中"},
+    "rec_session_label_evening": {"ko": "장 마감 후", "zh-TW": "收盤後"},
+    "rec_footer": {
+        "ko": "⚡ DB 즉시 조회 모드 · 매일 평일 자동 분석 (GitHub Actions): 🌅 08:00 / ☀️ 14:00 / 🌙 21:00 KST",
+        "zh-TW": "⚡ DB 即時查詢模式 · 每工作日自動分析 (GitHub Actions): 🌅 08:00 / ☀️ 14:00 / 🌙 21:00 KST",
+    },
+
+    # ════════════════════════════════
     # 거시경제 헤더
     # ════════════════════════════════
     "macro_no_data": {"ko": "데이터 없음", "zh-TW": "無資料"},

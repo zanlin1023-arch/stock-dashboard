@@ -258,6 +258,50 @@ def evaluate_stock(code: str, name: str, market_cap_eok: int, price: float = 0, 
     elif f_streak >= 3:
         score += 5
 
+    # 추천 이유 시그널 모음 (사람이 읽을 수 있는 형태)
+    signals: list[str] = []
+    if "동반 매수" in verdict:
+        signals.append("🟢 외인+기관 동반 매수")
+    elif "매수 전환" in verdict:
+        signals.append("🟢 수급 매수 전환")
+    elif "동반 매도" in verdict:
+        signals.append("🔴 외인+기관 동반 매도")
+    elif "매도 전환" in verdict:
+        signals.append("🔴 수급 매도 전환")
+    if f_streak >= 5:
+        signals.append(f"🔥 외인 {f_streak}일 연속 순매수")
+    elif f_streak >= 3:
+        signals.append(f"📈 외인 {f_streak}일 순매수")
+    if f5 > threshold:
+        signals.append(f"💰 외인 5일 +{int(f5):,}억 매수 (임계 {threshold}억↑)")
+    if i5 > threshold:
+        signals.append(f"🏦 기관 5일 +{int(i5):,}억 매수 (임계 {threshold}억↑)")
+    for s in momentum_signals:
+        if isinstance(s, (list, tuple)) and len(s) >= 2:
+            region = str(s[0])
+            label = str(s[1])
+            sc = s[2] if len(s) > 2 else None
+            detail = str(s[3]) if len(s) > 3 and s[3] else ""
+            region_emoji = "🌍" if "글로벌" in region else "🇰🇷"
+            sc_str = f" (+{int(sc)}점)" if isinstance(sc, (int, float)) and sc else ""
+            detail_str = f" — {detail}" if detail else ""
+            text = f"{region_emoji} {label}{detail_str}{sc_str}"
+            if text not in signals:
+                signals.append(text)
+        elif isinstance(s, str) and s and s not in signals:
+            signals.append(s)
+    foreign_5d_eok = int(round(f5))
+    inst_5d_eok = int(round(i5))
+
+    # 섹터/테마 (1회만 — 캐시 활용)
+    sector_name = ""
+    try:
+        import sector_compare as _sc
+        sec = _sc.compare_to_peers(code, max_peers=1)
+        sector_name = sec.get("sector_name") or ""
+    except Exception:
+        pass
+
     return {
         "name": name,
         "code": code,
@@ -270,8 +314,12 @@ def evaluate_stock(code: str, name: str, market_cap_eok: int, price: float = 0, 
         "i5": i5,
         "f_streak": f_streak,
         "score": score,
-        "momentum_score": momentum_buy_score,  # 모멘텀 점수 별도
-        "total_score": score + (momentum_buy_score * 0.5),  # 종합 (모멘텀 50% 가중)
+        "momentum_score": momentum_buy_score,
+        "total_score": score + (momentum_buy_score * 0.5),
+        "signals": signals,
+        "foreign_5d": foreign_5d_eok,
+        "inst_5d": inst_5d_eok,
+        "sector_name": sector_name,
     }
 
 
