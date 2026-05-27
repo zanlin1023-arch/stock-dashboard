@@ -261,7 +261,7 @@ if analyze_btn and query:
                 "senkou_a": float(df["senkou_a"].iloc[-1]) if df["senkou_a"].notna().any() else None,
                 "senkou_b": float(df["senkou_b"].iloc[-1]) if df["senkou_b"].notna().any() else None,
             })
-            # 시간 사이클 + 미래 추세 + 수급 (DB 누적 분석용)
+            # 시간 사이클 + 미래 추세 + 수급 + 패턴 매칭 (DB 누적 분석용)
             from chart_ichimoku import compute_time_cycles, project_future_path
             cycles = compute_time_cycles(swings["C"]["idx"], len(df))
             future_path = project_future_path(
@@ -280,9 +280,20 @@ if analyze_btn and query:
             except Exception:
                 pass
 
+            pattern_data = None
+            try:
+                import pattern_match as pm
+                pattern_data = pm.predict_future_path(
+                    code=code, current_price=decision["price"],
+                    window=60, n_future=20, top_k=3,
+                )
+            except Exception:
+                pass
+
             saved = db.save_analysis(
                 code, name, tech_for_db, decision, targets, swings,
                 cycles=cycles, future_path=future_path, flow=flow_data,
+                pattern_match=pattern_data,
             )
             if saved:
                 st.success(f"{t('db_save_done')} (id: {saved.get('id')})")

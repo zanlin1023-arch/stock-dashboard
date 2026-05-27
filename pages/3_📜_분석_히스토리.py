@@ -229,6 +229,40 @@ def _render_raw_data_expanders(records: list[dict], limit: int = 5):
                         f"C: {c.get('price', 0):,.0f}"
                     )
 
+            # 패턴 매칭 (키움 방식)
+            pm_data = raw.get("pattern_match") or {}
+            proj = pm_data.get("projection") or {}
+            patterns_list = pm_data.get("patterns") or []
+            if proj:
+                has_any = True
+                st.markdown("**🔍 패턴 매칭 (과거 유사 패턴 기반 미래 예측)**")
+                pc = proj.get("pattern_count", 0)
+                avg_corr = proj.get("avg_correlation", 0)
+                avg_path = proj.get("avg_path") or []
+                low_path = proj.get("low_path") or []
+                high_path = proj.get("high_path") or []
+                price_now = float(r.get("price") or 1)
+                if avg_path:
+                    last_avg = avg_path[-1]
+                    last_low = low_path[-1] if low_path else last_avg
+                    last_high = high_path[-1] if high_path else last_avg
+                    pct = (last_avg / price_now - 1) * 100
+                    st.markdown(
+                        f"- 유사 패턴 **{pc}개** (평균 상관계수 r={avg_corr})"
+                    )
+                    st.markdown(
+                        f"- 20봉 후 평균: **{last_avg:,.0f}원** ({pct:+.1f}%)"
+                    )
+                    st.caption(
+                        f"  · 보수(low): {last_low:,.0f} · 낙관(high): {last_high:,.0f}"
+                    )
+                if patterns_list:
+                    pattern_dates = " · ".join(
+                        f"{p.get('start_date', '?')}~{p.get('end_date', '?')} (r={p.get('correlation')})"
+                        for p in patterns_list[:3]
+                    )
+                    st.caption(f"  · 매칭 구간: {pattern_dates}")
+
     if not has_any:
         st.info(
             "💡 future_path / flow / cycles 데이터는 코드 업데이트 (2026-05-26) 이후 "

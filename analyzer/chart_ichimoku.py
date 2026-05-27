@@ -706,48 +706,114 @@ def render_ichimoku_chart(
             arrowprops=dict(arrowstyle="->", color="#555", lw=0.8),
         )
 
-    # ───── 미래 추세 시나리오 (N파동: 상승-조정-재상승) ─────
-    future_path = project_future_path(
-        current_price=current_price,
-        cycles=cycles,
-        targets=targets,
-        stop=decision.get("stop"),
-    )
-    # 차트 좌표로 변환 + 범위 필터
-    chart_path = []
-    for p in future_path:
-        rel_idx = p["target_idx"] - plot_base_idx
-        if 0 <= rel_idx < n_total:
-            chart_path.append({**p, "rel_idx": rel_idx})
-    if chart_path:
-        xs = [today_x] + [p["rel_idx"] for p in chart_path]
-        ys = [current_price] + [p["price"] for p in chart_path]
-        ax_main.plot(
-            xs, ys,
-            linestyle=":", linewidth=1.8, color="#2C3E50",
-            marker="o", markersize=6,
-            markerfacecolor="#2C3E50", markeredgecolor="white",
-            markeredgewidth=1.2,
-            zorder=6,
-            label="예상 경로",
+    # ───── 미래 추세 예측 (패턴 매칭 우선, 실패 시 N파동 fallback) ─────
+    pattern_result = None
+    try:
+        import pattern_match
+        pattern_result = pattern_match.predict_future_path(
+            code=code, current_price=current_price,
+            window=60, n_future=20, top_k=3,
         )
-        for p in chart_path:
-            try:
-                date_str = extended.index[p["rel_idx"]].strftime("%m/%d")
-            except Exception:
-                date_str = f"+{p['cycle']}봉"
-            pct = (p["price"] / current_price - 1) * 100
-            color = "#C0392B" if p["is_peak"] else "#2980B9"
-            va = "bottom" if p["is_peak"] else "top"
-            offset_y = (0.03 if p["is_peak"] else -0.03) * y_range
-            ax_main.text(
-                p["rel_idx"], p["price"] + offset_y,
-                f"{date_str}\n{p['price']:,.0f} ({pct:+.1f}%)\n{p['label']}",
-                fontsize=8, ha="center", va=va,
-                color=color, fontweight="bold",
-                bbox=dict(boxstyle="round,pad=0.25", facecolor="white",
-                          edgecolor=color, alpha=0.92, linestyle="--"),
+    except Exception:
+        pattern_result = None
+
+    if pattern_result and pattern_result.get("projection"):
+        # 패턴 매칭 방식 — 평균 경로 + low/high 신뢰 밴드
+        proj = pattern_result["projection"]
+        # 미래 20봉을 today_x 기준 1봉씩 → rel_idx 변환 (extended가 35봉 미래 보유)
+        future_rel = [today_x + d for d in proj["days"]]
+        future_rel_in_range = [(i, rel) for i, rel in enumerate(future_rel) if rel < n_total]
+        if future_rel_in_range:
+            valid_x = [today_x] + [rel for _, rel in future_rel_in_range]
+            valid_avg = [current_price] + [proj["avg_path"][i] for i, _ in future_rel_in_range]
+            valid_low = [current_price] + [proj["low_path"][i] for i, _ in future_rel_in_range]
+            valid_high = [current_price] + [proj["high_path"][i] for i, _ in future_rel_in_range]
+
+            # 신뢰 밴드 (low~high 음영)
+            ax_main.fill_between(
+                valid_x, valid_low, valid_high,
+                color="#3498DB", alpha=0.12, zorder=4,
+                label="패턴 매칭 범위",
             )
+            # 평균 경로 (실선)
+            ax_main.plot(
+                valid_x, valid_avg,
+                linestyle="-", linewidth=1.8, color="#1B6FB0",
+                marker="o", markersize=4,
+                markerfacecolor="#1B6FB0", markeredgecolor="white",
+                markeredgewidth=0.8, alpha=0.9, zorder=5,
+                label="패턴 평균",
+            )
+            # low/high 경계선 (얇은 점선)
+            ax_main.plot(valid_x, valid_low, linestyle=":", linewidth=0.8,
+                         color="#1B6FB0", alpha=0.5, zorder=4)
+            ax_main.plot(valid_x, valid_high, linestyle=":", linewidth=0.8,
+                         color="#1B6FB0", alpha=0.5, zorder=4)
+
+            # 마지막(20일 후) 라벨
+            last_idx = future_rel_in_range[-1][1]
+            last_avg = valid_avg[-1]
+            last_low = valid_low[-1]
+            last_high = valid_high[-1]
+            avg_pct = (last_avg / current_price - 1) * 100
+            try:
+                end_date = extended.index[last_idx].strftime("%m/%d")
+            except Exception:
+                end_date = f"+{proj['days'][-1]}봉"
+            n_pat = proj.get("pattern_count", 0)
+            avg_corr = proj.get("avg_correlation", 0)
+            ax_main.text(
+                last_idx, last_avg,
+                f"  {end_date} 평균\n"
+                f"  {last_avg:,.0f} ({avg_pct:+.1f}%)\n"
+                f"  범위: {last_low:,.0f}~{last_high:,.0f}\n"
+                f"  유사 패턴 {n_pat}개 (r={avg_corr})",
+                fontsize=8, va="center", ha="left",
+                color="#1B6FB0", fontweight="bold",
+                bbox=dict(boxstyle="round,pad=0.3", facecolor="white",
+                          edgecolor="#1B6FB0", alpha=0.95),
+            )
+    else:
+        # Fallback: 일목 N파동 시나리오 (편향 있음, 패턴 데이터 부족 시)
+        future_path = project_future_path(
+            current_price=current_price,
+            cycles=cycles,
+            targets=targets,
+            stop=decision.get("stop"),
+        )
+        chart_path = []
+        for p in future_path:
+            rel_idx = p["target_idx"] - plot_base_idx
+            if 0 <= rel_idx < n_total:
+                chart_path.append({**p, "rel_idx": rel_idx})
+        if chart_path:
+            xs = [today_x] + [p["rel_idx"] for p in chart_path]
+            ys = [current_price] + [p["price"] for p in chart_path]
+            ax_main.plot(
+                xs, ys,
+                linestyle=":", linewidth=1.8, color="#2C3E50",
+                marker="o", markersize=6,
+                markerfacecolor="#2C3E50", markeredgecolor="white",
+                markeredgewidth=1.2, zorder=6,
+                label="일목 N파동 (fallback)",
+            )
+            for p in chart_path:
+                try:
+                    date_str = extended.index[p["rel_idx"]].strftime("%m/%d")
+                except Exception:
+                    date_str = f"+{p['cycle']}봉"
+                pct = (p["price"] / current_price - 1) * 100
+                color = "#C0392B" if p["is_peak"] else "#2980B9"
+                va = "bottom" if p["is_peak"] else "top"
+                offset_y = (0.03 if p["is_peak"] else -0.03) * y_range
+                ax_main.text(
+                    p["rel_idx"], p["price"] + offset_y,
+                    f"{date_str}\n{p['price']:,.0f} ({pct:+.1f}%)\n{p['label']}",
+                    fontsize=8, ha="center", va=va,
+                    color=color, fontweight="bold",
+                    bbox=dict(boxstyle="round,pad=0.25", facecolor="white",
+                              edgecolor=color, alpha=0.92, linestyle="--"),
+                )
 
     # ───── 의사결정 박스 (좌측 상단) ─────
     info_lines = [
@@ -789,6 +855,19 @@ def render_ichimoku_chart(
         info_lines.append(f"💹 수급 (7일): {flow_verdict}")
         if flow_detail:
             info_lines.append(f"   {flow_detail}")
+
+    # 패턴 매칭 결과 (있을 때만) — 키움/머니트리 방식 정직성
+    if pattern_result and pattern_result.get("projection"):
+        proj = pattern_result["projection"]
+        avg_last = proj["avg_path"][-1] if proj.get("avg_path") else current_price
+        avg_pct = (avg_last / current_price - 1) * 100
+        info_lines.append("")
+        info_lines.append(
+            f"🔍 패턴매칭 (과거 유사 {proj.get('pattern_count')}개, r={proj.get('avg_correlation')})"
+        )
+        info_lines.append(
+            f"   20봉 후 평균 {avg_last:,.0f} ({avg_pct:+.1f}%)"
+        )
 
     # 매매 가이드 (가까운 목표부터 순서대로 분할 익절)
     if decision["upside_targets"]:

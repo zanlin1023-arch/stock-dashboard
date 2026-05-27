@@ -113,6 +113,16 @@ def run_snapshot() -> dict:
             except Exception:
                 pass
 
+            pattern_data = None
+            try:
+                import pattern_match as pm
+                pattern_data = pm.predict_future_path(
+                    code=code, current_price=decision["price"],
+                    window=60, n_future=20, top_k=3,
+                )
+            except Exception:
+                pass
+
             # DB 저장 (scheduled로 표시)
             saved = db.save_analysis(
                 code, name, tech_for_db, decision, targets, swings,
@@ -120,6 +130,7 @@ def run_snapshot() -> dict:
                 cycles=cycles,
                 future_path=future_path,
                 flow=flow_data,
+                pattern_match=pattern_data,
             )
             if saved:
                 results["success"].append({"code": code, "name": name, "id": saved.get("id")})

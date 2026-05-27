@@ -131,12 +131,23 @@ with st.expander(t("holdings_add"), expanded=False):
                             except Exception:
                                 pass
 
+                            pattern_data = None
+                            try:
+                                import pattern_match as pm
+                                pattern_data = pm.predict_future_path(
+                                    code=code, current_price=decision["price"],
+                                    window=60, n_future=20, top_k=3,
+                                )
+                            except Exception:
+                                pass
+
                             saved = db.save_analysis(
                                 code, name, tech_for_db, decision, targets, swings,
                                 snapshot_type="manual",
                                 cycles=cycles,
                                 future_path=future_path,
                                 flow=flow_data,
+                                pattern_match=pattern_data,
                             )
                             if saved:
                                 st.success(f"📥 분석 히스토리 저장 완료 — {decision.get('action', '')}")

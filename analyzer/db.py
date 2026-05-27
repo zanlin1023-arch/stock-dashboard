@@ -129,6 +129,7 @@ def save_analysis(
     cycles: Optional[list] = None,
     future_path: Optional[list] = None,
     flow: Optional[dict] = None,
+    pattern_match: Optional[dict] = None,
 ) -> dict:
     """분석 결과를 히스토리에 저장 (같은 날 같은 종목+타입은 덮어쓰기).
 
@@ -136,6 +137,7 @@ def save_analysis(
       - cycles: 시간 변곡 마커 리스트 (과거+미래)
       - future_path: 미래 추세 예상 경로 (N파동 시나리오)
       - flow: {"verdict": str, "daily": list[dict]} 외국인/기관 수급
+      - pattern_match: {"projection":{...}, "patterns":[...]} 키움 방식 패턴 매칭
     """
     from datetime import date as _date
     client = get_client()
@@ -169,6 +171,7 @@ def save_analysis(
             "cycles": _json_safe(cycles) if cycles else None,
             "future_path": _json_safe(future_path) if future_path else None,
             "flow": _json_safe(flow) if flow else None,
+            "pattern_match": _json_safe(pattern_match) if pattern_match else None,
         },
     }
     # 같은 날짜+종목+타입 중복 시 UPDATE (UNIQUE 제약 활용)
