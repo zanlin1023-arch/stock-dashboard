@@ -826,15 +826,22 @@ def get_lang() -> str:
 
 
 def set_lang(lang: str) -> None:
-    """언어 설정 (session_state 저장 + URL query 동기화)."""
+    """언어 설정 (session_state 저장 + URL query 동기화).
+
+    URL query param이 새로고침 후 언어 복원의 핵심 → 반드시 갱신.
+    """
     if lang not in SUPPORTED_LANGS:
         return
     st.session_state["lang"] = lang
-    # URL query param 동기화
+    alias = _lang_to_alias(lang)
+    # URL query param 동기화 (신버전 dict-like → 구버전 fallback)
     try:
-        st.query_params["lang"] = _lang_to_alias(lang)
+        st.query_params["lang"] = alias
     except Exception:
-        pass
+        try:
+            st.experimental_set_query_params(lang=alias)
+        except Exception:
+            pass
 
 
 def t(key: str, **kwargs) -> str:
@@ -906,29 +913,27 @@ def td(text) -> str:
 
 
 def language_selector(location: str = "sidebar") -> None:
-    """언어 선택 UI."""
-    current = get_lang()
+    """언어 선택 UI.
+
+    새로고침 후에도 언어 유지: URL query param(?lang=kr/tw)을 single source of truth로.
+    on_change 콜백에서 선택 즉시 query param 갱신 → 새로고침해도 URL에 남아 복원됨.
+    """
     options = list(SUPPORTED_LANGS.keys())
     labels = [SUPPORTED_LANGS[l] for l in options]
+    current = get_lang()
     current_idx = options.index(current) if current in options else 0
+    key = "lang_selector" if location == "sidebar" else "lang_selector_main"
 
-    if location == "sidebar":
-        with st.sidebar:
-            selected_label = st.selectbox(
-                "🌐 Language",
-                labels,
-                index=current_idx,
-                key="lang_selector",
-            )
-    else:
-        selected_label = st.selectbox(
-            "🌐 Language",
-            labels,
-            index=current_idx,
-            key="lang_selector_main",
-        )
+    def _on_change():
+        sel_label = st.session_state.get(key)
+        if sel_label in labels:
+            set_lang(options[labels.index(sel_label)])
 
-    selected_lang = options[labels.index(selected_label)]
-    if selected_lang != current:
-        set_lang(selected_lang)
-        st.rerun()
+    target = st.sidebar if location == "sidebar" else st
+    target.selectbox(
+        "🌐 Language",
+        labels,
+        index=current_idx,
+        key=key,
+        on_change=_on_change,
+    )
