@@ -347,18 +347,22 @@ def prefetch_ichimoku(codes: list[str], max_workers: int = 8) -> None:
 
 
 def ichimoku_badge(sig: dict) -> str:
-    """일목 시그널 dict → 표시용 짧은 배지 (언어별)."""
+    """일목 시그널 dict → 표시용 짧은 배지 (언어별). 과열(RSI≥70)이면 ⚠️ 덧붙임."""
     if not sig:
         return "—"
     if sig.get("fresh"):
-        return t("ichimoku_fresh")
-    return {
-        "STRONG_BUY": t("ichimoku_strong_buy"),
-        "BUY": t("ichimoku_buy"),
-        "NEUTRAL": t("ichimoku_neutral"),
-        "SELL": t("ichimoku_sell"),
-        "STRONG_SELL": t("ichimoku_strong_sell"),
-    }.get(sig.get("stance"), "—")
+        base = t("ichimoku_fresh")
+    else:
+        base = {
+            "STRONG_BUY": t("ichimoku_strong_buy"),
+            "BUY": t("ichimoku_buy"),
+            "NEUTRAL": t("ichimoku_neutral"),
+            "SELL": t("ichimoku_sell"),
+            "STRONG_SELL": t("ichimoku_strong_sell"),
+        }.get(sig.get("stance"), "—")
+    if sig.get("overheated"):
+        base = f"{base} {t('ichimoku_overheated')}"
+    return base
 
 
 def ichimoku_sort_key(sig: dict) -> int:

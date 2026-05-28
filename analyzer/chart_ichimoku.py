@@ -333,7 +333,21 @@ def ichimoku_signal(df: pd.DataFrame) -> dict:
         for i in range(-4, -1)
     )
     fresh = cloud_pos == "above" and tk_bull and recent_not_above
-    return {"stance": stance, "fresh": fresh, "cloud_pos": cloud_pos}
+
+    # 과열 경고: RSI ≥ 70. 26봉 보유 백테스트(28종목·2015표본)에서 과매수는
+    # 승률 53.7% / 평균 +7.8%로, 정상(68.3% / +11.7%)·과매도(71.4% / +13.6%) 대비
+    # 뚜렷이 열위 → 추천/리스트에 ⚠️ 표시만(점수 미반영, 검증된 랭킹 유지).
+    #
+    # [미도입] 상대강도(RS, 종목 20일 수익 − 코스피)는 같은 백테스트에서 26봉 forward
+    #   상관 -0.02(우위 0). 단일 거래일엔 되돌림으로 음의 상관(-0.48)이 떠도 장기 예측력
+    #   없음 → 필터/점수에 넣지 않음.
+    # [향후 후보] 과매도(RSI < 30)가 26봉 최고 성과(+13.6%, 71.4%) — 역발상 진입 신호로
+    #   활용 검토 가능(현재 미적용).
+    overheated = rsi is not None and rsi >= 70
+    return {
+        "stance": stance, "fresh": fresh, "cloud_pos": cloud_pos,
+        "overheated": overheated, "rsi": rsi,
+    }
 
 
 def make_decision(df: pd.DataFrame, swings: dict, targets: dict) -> dict:
