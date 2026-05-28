@@ -138,8 +138,13 @@ def _render_table(records: list[dict], holdings_map: dict | None = None):
                     price = float(pm_avg[i])
                     date_str = _cycle_to_date(analyzed_at_iso, target_day)
                     date_prefix = f"📅 {date_str} · " if date_str else ""
+                    if _avg and _avg > 0:
+                        # 보유: 평단 대비 %만
+                        pct_avg = (price / _avg - 1) * 100
+                        return f"{date_prefix}{price:,.0f} (평단 {pct_avg:+.1f}%)"
+                    # 관심/수동: 현재가 대비 %
                     pct = (price / price_now - 1) * 100 if price_now else 0
-                    return f"{date_prefix}{price:,.0f} ({pct:+.1f}%{_avg_suffix(price)})"
+                    return f"{date_prefix}{price:,.0f} ({pct:+.1f}%)"
             return "-"
 
         # 보유 평단가 + 현재가 대비 손익 (보유 페이지에서만)
