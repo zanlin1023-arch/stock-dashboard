@@ -189,6 +189,57 @@ def cap_targets(targets: dict, current_price: float, atr: float | None = None) -
 
 
 # ───────────────────────────────────────────────────────
+# 2-c. 주봉 추세 필터 (장기 방향 — 일봉 신호 보강용, 2026-05 추가)
+# ───────────────────────────────────────────────────────
+def get_weekly_trend(code: str) -> dict:
+    """일봉을 주봉으로 리샘플 → 주봉 일목 구름 위치로 장기 추세 판단.
+
+    추세 순응 원칙: 일봉 매수 신호가 주봉 추세와 같으면 신뢰↑(가산), 반대면 위험(감점).
+
+    Returns:
+        {"trend": "above"/"inside"/"below"/None, "bonus": +10/0/-10, "label": str}
+        - above: 장기 상승 (주봉 구름 위) → 일봉 매수 신호 +10
+        - below: 장기 하락 (주봉 구름 아래) → 일봉 매수 신호 -10 (역추세 위험)
+        - inside: 횡보 (구름 안) → 0
+    """
+    out = {"trend": None, "bonus": 0, "label": "—"}
+    try:
+        import technical
+        # 주봉 52주 일목엔 1년+ 필요 → 2년치 일봉
+        df = technical.fetch_ohlcv(code, days=730)
+        if df is None or len(df) < 60:
+            return out
+        # 일봉 → 주봉 리샘플 (금요일 종가 기준)
+        wk = df.resample("W").agg({
+            "open": "first", "high": "max", "low": "min",
+            "close": "last", "volume": "sum",
+        }).dropna()
+        if len(wk) < 30:
+            return out
+        high, low, close = wk["high"], wk["low"], wk["close"]
+        # 주봉 일목 (9/26/52주)
+        tenkan = (high.rolling(9).max() + low.rolling(9).min()) / 2
+        kijun = (high.rolling(26).max() + low.rolling(26).min()) / 2
+        senkou_a = ((tenkan + kijun) / 2).shift(26)
+        senkou_b = ((high.rolling(52).max() + low.rolling(52).min()) / 2).shift(26)
+        price = float(close.iloc[-1])
+        sa = senkou_a.iloc[-1]
+        sb = senkou_b.iloc[-1]
+        if sa != sa or sb != sb:  # NaN (데이터 부족)
+            return out
+        top, bot = max(sa, sb), min(sa, sb)
+        if price > top:
+            out.update(trend="above", bonus=10, label="🟢 장기 상승 (주봉 구름 위)")
+        elif price < bot:
+            out.update(trend="below", bonus=-10, label="🔴 장기 하락 (주봉 구름 아래)")
+        else:
+            out.update(trend="inside", bonus=0, label="➖ 장기 횡보 (주봉 구름 안)")
+    except Exception:
+        pass
+    return out
+
+
+# ───────────────────────────────────────────────────────
 # 3. 시간론 — 변곡 예측 (9/17/26봉)
 # ───────────────────────────────────────────────────────
 def compute_time_cycles(start_idx: int, total_len: int, cycles: tuple = (9, 17, 26)) -> list[dict]:

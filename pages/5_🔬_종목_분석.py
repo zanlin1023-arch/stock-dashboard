@@ -158,6 +158,23 @@ if analyze_btn and query:
 
     st.markdown(f"### {decision_color} {td(decision['action'])}")
 
+    # 📆 주봉 추세 필터 — 일봉 신호 vs 장기 추세 일치 여부 (2026-05 추가)
+    try:
+        from chart_ichimoku import get_weekly_trend
+        wk = get_weekly_trend(code)
+        if wk.get("trend"):
+            stance = decision["stance"]
+            is_buy = stance in ("STRONG_BUY", "BUY")
+            if is_buy and wk["trend"] == "above":
+                msg, color = f"✅ 일봉 매수 + {wk['label']} → 추세 일치 (신뢰↑ +10)", "success"
+            elif is_buy and wk["trend"] == "below":
+                msg, color = f"⚠️ 일봉 매수지만 {wk['label']} → 역추세 위험 (-10)", "warning"
+            else:
+                msg, color = f"📆 주봉 추세: {wk['label']}", "info"
+            getattr(st, color)(msg)
+    except Exception:
+        pass
+
     dc1, dc2, dc3 = st.columns(3)
     with dc1:
         cloud_txt = {

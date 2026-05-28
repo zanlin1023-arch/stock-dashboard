@@ -302,6 +302,28 @@ def evaluate_stock(code: str, name: str, market_cap_eok: int, price: float = 0, 
     except Exception:
         pass
 
+    # 📆 주봉 추세 필터 (2026-05 추가) — 장기 추세 순응 가산/감점
+    # [이전 방식] 주봉 미반영. total_score = score + momentum_score*0.5 만 사용했음.
+    # [변경] 일봉 점수가 양수(매수권)일 때만 주봉 추세 ±10 반영:
+    #        주봉 상승(구름 위) +10 / 주봉 하락(구름 아래) -10 / 횡보 0
+    #        → 역추세(일봉 매수 but 주봉 하락) 종목 자동 감점, 변동주 함정 회피
+    weekly_bonus = 0
+    weekly_label = ""
+    try:
+        from chart_ichimoku import get_weekly_trend
+        wk = get_weekly_trend(code)
+        if wk.get("trend") and score > 0:  # 매수권 종목만 추세 필터 적용
+            weekly_bonus = wk.get("bonus", 0)
+            weekly_label = wk.get("label", "")
+            if weekly_bonus > 0:
+                signals.append(f"📆 {weekly_label} +{weekly_bonus}")
+            elif weekly_bonus < 0:
+                signals.append(f"📆 {weekly_label} {weekly_bonus}")
+    except Exception:
+        pass
+
+    score_with_weekly = score + weekly_bonus
+
     return {
         "name": name,
         "code": code,
@@ -313,9 +335,12 @@ def evaluate_stock(code: str, name: str, market_cap_eok: int, price: float = 0, 
         "f5": f5,
         "i5": i5,
         "f_streak": f_streak,
-        "score": score,
+        # [이전 방식] "score": score (주봉 미반영)
+        "score": score_with_weekly,            # 주봉 추세 가산 포함
+        "weekly_trend": weekly_label,
         "momentum_score": momentum_buy_score,
-        "total_score": score + (momentum_buy_score * 0.5),
+        # [이전 방식] "total_score": score + momentum_score*0.5
+        "total_score": score_with_weekly + (momentum_buy_score * 0.5),
         "signals": signals,
         "foreign_5d": foreign_5d_eok,
         "inst_5d": inst_5d_eok,
