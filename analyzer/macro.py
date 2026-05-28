@@ -239,20 +239,28 @@ def _fetch_naver_usdkrw() -> dict | None:
 
 
 def _fetch_alt_usdkrw() -> dict | None:
-    """대체 환율 소스 — exchangerate.host (무료)."""
+    """대체 환율 소스 — FinanceDataReader USD/KRW.
+
+    exchangerate.host 무료 플랜이 access_key 필수로 바뀌어 fallback이 깨짐 →
+    이미 의존성으로 쓰는 FDR로 교체. 전일 종가 대비 등락까지 산출.
+    """
     try:
-        r = requests.get(
-            "https://api.exchangerate.host/latest",
-            params={"base": "USD", "symbols": "KRW"},
-            timeout=8,
-        )
-        data = r.json()
-        rate = data.get("rates", {}).get("KRW")
-        if rate:
-            return {"value": float(rate), "change": 0.0, "change_pct": 0.0}
+        import datetime as dt
+
+        import FinanceDataReader as fdr
+
+        end = dt.date.today()
+        start = end - dt.timedelta(days=10)
+        df = fdr.DataReader("USD/KRW", start, end)
+        if df is None or df.empty:
+            return None
+        close = float(df.iloc[-1]["Close"])
+        prev = float(df.iloc[-2]["Close"]) if len(df) >= 2 else close
+        change = close - prev
+        pct = (change / prev * 100) if prev else 0.0
+        return {"value": close, "change": change, "change_pct": pct}
     except Exception:
-        pass
-    return None
+        return None
 
 
 def _get_usdkrw() -> dict | None:

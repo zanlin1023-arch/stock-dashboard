@@ -328,7 +328,7 @@ def get_daily_flow(code: str, days: int = 10) -> list[dict]:
     return rows[:days]
 
 
-def detect_flow_reversal(code: str, lookback: int = 7) -> dict:
+def detect_flow_reversal(code: str, lookback: int = 7, daily: list[dict] | None = None) -> dict:
     """수급 전환 감지: 최근 N일 외국인/기관 매매 패턴 분석.
 
     감지하는 패턴:
@@ -336,8 +336,13 @@ def detect_flow_reversal(code: str, lookback: int = 7) -> dict:
     - 매도 지속 (최근 N일 매도 우세)
     - 매수 → 매도 전환 (앞 절반 매수, 뒤 절반 매도)
     - 매도 → 매수 전환 (앞 절반 매도, 뒤 절반 매수)
+
+    daily 전달 시 추가 네트워크 호출 없이 재사용 (lookback 길이로 슬라이스).
     """
-    daily = get_daily_flow(code, days=lookback)
+    if daily is None:
+        daily = get_daily_flow(code, days=lookback)
+    else:
+        daily = daily[:lookback]
     if len(daily) < 4:
         return {"available": False, "reason": "데이터 부족"}
 

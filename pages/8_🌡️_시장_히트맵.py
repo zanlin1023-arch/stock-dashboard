@@ -35,6 +35,47 @@ with c3:
     refresh = st.button(t("heatmap_refresh"))
 
 
+def _parse_change_pct(tds) -> float:
+    """네이버 시총표 행에서 등락률을 부호까지 정확히 파싱.
+
+    텍스트 부호(+/-) → 색상 클래스(red↑/nv↓) → 전일비 blind(상승/하락/보합)
+    순으로 방향을 판정. 셋 다 없으면 0.0(보합) 처리.
+    """
+    import re
+
+    if len(tds) <= 4:
+        return 0.0
+    pct_td = tds[4]
+    raw = pct_td.get_text(strip=True).replace("%", "").replace(",", "").replace(" ", "")
+    m = re.search(r"-?\d+(?:\.\d+)?", raw)
+    if not m:
+        return 0.0
+    val = abs(float(m.group()))
+    if val == 0:
+        return 0.0
+
+    sign = 0
+    if raw.startswith("-"):
+        sign = -1
+    elif raw.startswith("+"):
+        sign = 1
+    else:
+        span = pct_td.select_one("span")
+        cls = " ".join(span.get("class", [])) if span else ""
+        if "nv" in cls:
+            sign = -1
+        elif "red" in cls:
+            sign = 1
+        else:
+            blind = tds[3].select_one("span.blind") if len(tds) > 3 else None
+            btxt = blind.get_text(strip=True) if blind else ""
+            if "하락" in btxt or "하한" in btxt:
+                sign = -1
+            elif "상승" in btxt or "상한" in btxt:
+                sign = 1
+    return val * (sign if sign else 1)
+
+
 @st.cache_data(ttl=600, show_spinner=False)
 def _fetch_market_caps(market_filter: str, n: int) -> list[dict]:
     """네이버 시총 상위 페이지 스크래핑 — 인증 불필요, 빠름.
@@ -88,17 +129,10 @@ def _fetch_market_caps(market_filter: str, n: int) -> list[dict]:
                         price = float(tds[2].get_text(strip=True).replace(",", ""))
                     except Exception:
                         continue
-                    # 등락률
-                    pct_td = tds[4] if len(tds) > 4 else None
-                    change_pct = 0.0
-                    if pct_td is not None:
-                        pct_txt = pct_td.get_text(strip=True).replace("%", "").replace(",", "").replace("+", "")
-                        try:
-                            change_pct = float(pct_txt)
-                            if pct_td.select_one(".nv01") or "blue" in str(pct_td.get("class", "")):
-                                change_pct = -abs(change_pct)
-                        except Exception:
-                            change_pct = 0.0
+                    # 등락률 — 부호 판정 다단계 fallback
+                    # ① td[4] 텍스트의 +/- → ② span 색상 클래스(red=상승/nv=하락)
+                    # → ③ td[3] 전일비 blind 텍스트(상승/하락/보합)
+                    change_pct = _parse_change_pct(tds)
                     # 시가총액 (백만원 단위 → 원)
                     try:
                         cap_txt = tds[6].get_text(strip=True).replace(",", "")

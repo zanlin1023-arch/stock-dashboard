@@ -30,16 +30,31 @@ HEADERS = {
 # 자동 제외 (보유 종목만)
 # =========================================================
 
-EXCLUDED_HOLDINGS = {
-    "032820",  # 우리기술
-    "080220",  # 제주반도체
-    "347700",  # 스피어
-    "389500",  # 에스비비테크
-    "119830",  # 아이텍
-    "006910",  # 보성파워텍
-    "108490",  # 로보티즈
-    "229640",  # LS에코에너지
+# DB(Supabase) holdings를 단일 진실원천으로 사용. 아래는 DB 조회 실패 시에만
+# 쓰는 최후 fallback (보유 변동 시 갱신 안 되므로 정상 경로에서는 무시됨).
+_FALLBACK_EXCLUDED = {
+    "032820", "080220", "347700", "389500",
+    "119830", "006910", "108490", "229640",
 }
+
+
+def _default_excluded() -> set[str]:
+    """exclude 미지정 시 기본 제외 종목 — DB holdings 자동 연동.
+
+    DB 코드가 앞자리 0이 빠진 채 저장될 수 있어 zfill(6)으로 정규화.
+    """
+    try:
+        from analyzer import db
+        codes = {
+            (h.get("stock_code") or "").zfill(6)
+            for h in db.list_holdings()
+            if h.get("stock_code")
+        }
+        if codes:
+            return codes
+    except Exception:
+        pass
+    return set(_FALLBACK_EXCLUDED)
 
 
 # ETF/ETN/우선주 식별
@@ -200,23 +215,22 @@ def classify_tier(market_cap_eok: int) -> str:
 
 def evaluate_stock(code: str, name: str, market_cap_eok: int, price: float = 0, change_pct: str = "0") -> dict:
     """종목 종합 평가 — 펀더 점수 + 모멘텀 점수 둘 다 계산."""
-    # 일별 흐름 (선행 시그널) - 일별 데이터 1회 호출
+    # 일별 흐름 (선행 시그널) - 일별 데이터 1회만 호출하고 재사용
     daily = mc.get_daily_flow(code, days=10)
-    reversal = mc.detect_flow_reversal(code, lookback=7)
+    reversal = mc.detect_flow_reversal(code, lookback=7, daily=daily)
     verdict = reversal.get("verdict", "?") if reversal.get("available") else "?"
 
-    # 일별 데이터에서 누적 직접 계산
-    f5 = sum(r.get("foreign_net", 0) for r in daily[:5])
-    i5 = sum(r.get("inst_net", 0) for r in daily[:5])
+    # 5일 외인/기관 누적 — 일자별 종가로 환산 후 합산 (억원).
+    # [이전] 5일 순매수(주)를 합친 뒤 '최신 종가' 한 번만 곱해 근사 → 변동성 큰 날
+    #        오차 발생. [변경] 각 일자 (순매수 주 × 그날 종가) 후 합산해 정확화.
+    f5 = sum(r.get("foreign_net", 0) * r.get("close", 0) for r in daily[:5]) / 1e8
+    i5 = sum(r.get("inst_net", 0) * r.get("close", 0) for r in daily[:5]) / 1e8
     f_streak = 0
     for r in daily:
         if r.get("foreign_net", 0) > 0:
             f_streak += 1
         else:
             break
-    if daily and daily[0].get("close"):
-        f5 = f5 * daily[0]["close"] / 1e8
-        i5 = i5 * daily[0]["close"] / 1e8
 
     # 모멘텀 점수 (try momentum_signal.py)
     momentum_buy_score = 0
@@ -741,7 +755,7 @@ def recommend(top_n_per_tier: int = 3, exclude: set | None = None,
     5. (morning 한정) 미장/환율 보너스 점수 적용
     6. Tier별 상위 N개 반환
     """
-    excluded = exclude if exclude is not None else EXCLUDED_HOLDINGS
+    excluded = exclude if exclude is not None else _default_excluded()
     # morning + evening 모두 거시 반영. 단 미장 종합(global_score)은 morning만 유효
     overnight_ctx = {"available": False}
     if session in ("morning", "evening"):
@@ -757,31 +771,46 @@ def recommend(top_n_per_tier: int = 3, exclude: set | None = None,
     candidates = {c: v for c, v in candidates.items() if c not in excluded}
     print(f"[*] 보유 제외 후 {len(candidates)}개")
 
-    # 종목별 평가 — get_stock_info는 1회만 호출
-    print(f"[*] 일별 흐름 + 수급 분석 중 ({len(candidates)}개)...")
+    # 종목별 평가 — 종목당 Naver 6~8회 호출(I/O 바운드)이라 스레드 병렬화.
+    # [이전] 직렬 루프(~150종목 × ~5회)로 수 분 소요. [변경] ThreadPoolExecutor로
+    #        동시 처리 + detect_flow_reversal에 daily 재사용으로 중복 fetch 제거.
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    print(f"[*] 일별 흐름 + 수급 분석 중 ({len(candidates)}개, 병렬)...")
+
+    def _evaluate_one(code: str, info: dict) -> dict | None:
+        stock_info = get_stock_info(code)
+        mc_eok = stock_info.get("market_cap_eok", 0)
+        if mc_eok < 500:  # 500억 미만 제외
+            return None
+        result = evaluate_stock(
+            code, info["name"], mc_eok,
+            price=stock_info.get("close", 0),
+            change_pct=stock_info.get("change_pct", "0"),
+        )
+        result["sources"] = info["sources"]
+        # morning/evening 거시 보너스 적용 (미장/환율/유가/VIX/금리/뉴스)
+        if overnight_ctx.get("available"):
+            result = _apply_overnight_bonus(result, overnight_ctx)
+        return result
+
     evaluated = []
     processed = 0
-    for code, info in candidates.items():
-        try:
-            stock_info = get_stock_info(code)
-            mc_eok = stock_info.get("market_cap_eok", 0)
-            if mc_eok < 500:  # 500억 미만 제외
-                continue
-            result = evaluate_stock(
-                code, info["name"], mc_eok,
-                price=stock_info.get("close", 0),
-                change_pct=stock_info.get("change_pct", "0"),
-            )
-            result["sources"] = info["sources"]
-            # morning/evening 거시 보너스 적용 (미장/환율/유가/VIX/금리/뉴스)
-            if overnight_ctx.get("available"):
-                result = _apply_overnight_bonus(result, overnight_ctx)
-            evaluated.append(result)
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        futures = {
+            ex.submit(_evaluate_one, code, info): code
+            for code, info in candidates.items()
+        }
+        for fut in as_completed(futures):
             processed += 1
+            try:
+                result = fut.result()
+            except Exception:
+                result = None
+            if result is not None:
+                evaluated.append(result)
             if processed % 20 == 0:
-                print(f"   진행: {processed}개")
-        except Exception:
-            continue
+                print(f"   진행: {processed}/{len(futures)}")
 
     # Tier별 분류 + 정렬
     by_tier = {"large": [], "mid": [], "small": []}
