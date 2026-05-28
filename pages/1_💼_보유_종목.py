@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from common import init_page, get_db, nav_bar, sidebar_nav, render_macro_header
-from i18n import t
+from i18n import t, td
 
 st.set_page_config(page_title="보유 종목", page_icon="💼", layout="wide")
 init_page(t("holdings_title"))
@@ -150,7 +150,7 @@ with st.expander(t("holdings_add"), expanded=False):
                                 pattern_match=pattern_data,
                             )
                             if saved:
-                                st.success(f"{t('holdings_history_saved')} — {decision.get('action', '')}")
+                                st.success(f"{t('holdings_history_saved')} — {td(decision.get('action', ''))}")
                         except Exception as ana_err:
                             st.warning(f"{t('holdings_auto_analysis_fail')}: {ana_err}")
 

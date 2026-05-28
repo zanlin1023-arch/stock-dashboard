@@ -7,7 +7,7 @@ from pathlib import Path
 import streamlit as st
 
 from common import init_page, get_db, sidebar_nav, render_macro_header
-from i18n import t
+from i18n import t, td
 
 st.set_page_config(
     page_title="Dashboard",
@@ -476,7 +476,7 @@ for i in range(0, len(per_stock), 3):
 
                 # 수급 시그널 (외국인/기관) — verdict + 세부 (A옵션)
                 if s.get("flow_verdict"):
-                    st.caption(f"{t('home_card_supply')}: {s['flow_verdict']}")
+                    st.caption(f"{t('home_card_supply')}: {td(s['flow_verdict'])}")
                     if s.get("flow_detail"):
                         st.markdown(
                             f"<div style='font-size:0.78rem;color:#666;margin-left:18px;"
@@ -501,7 +501,7 @@ for i in range(0, len(per_stock), 3):
                     unsafe_allow_html=True,
                 )
                 if s.get("action"):
-                    st.caption(f"{t('home_card_signal')}: {s['action']}")
+                    st.caption(f"{t('home_card_signal')}: {td(s['action'])}")
                 if st.button(t("detail_analysis"), key=f"dash_anly_{i}_{j}_{s['code']}", use_container_width=True):
                     st.session_state["last_query"] = s["name"]
                     st.switch_page("pages/5_🔬_종목_분석.py")

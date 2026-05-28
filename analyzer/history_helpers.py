@@ -9,7 +9,7 @@ from datetime import datetime, timezone, timedelta
 import pandas as pd
 import streamlit as st
 
-from i18n import t
+from i18n import t, td
 
 
 # Supabase TIMESTAMPTZ는 UTC로 저장됨 → KST(+9h)로 변환해 표시
@@ -133,7 +133,7 @@ def _render_table(records: list[dict]):
                 "below": t("hist_cloud_below"),
                 "inside": t("hist_cloud_inside"),
             }.get(r.get("cloud_position", ""), "-"),
-            t("hist_col_decision"): r.get("decision_action", "-") or "-",
+            t("hist_col_decision"): td(r.get("decision_action", "-") or "-"),
             # 🔬 패턴 매칭 시점별 예측 가격 (실데이터 기반 — 일목 V/N/E 공식 대체)
             t("hist_col_pattern_5d"): _fmt_pattern(5),
             t("hist_col_pattern_10d"): _fmt_pattern(10),
@@ -144,7 +144,7 @@ def _render_table(records: list[dict]):
             t("hist_col_future_2nd"): future_2nd,
             t("hist_col_future_3rd"): future_3rd,
             t("hist_col_stop"): _fmt_target(r.get("stop_loss")),
-            t("hist_col_flow"): flow_short,
+            t("hist_col_flow"): td(flow_short),
         })
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
@@ -162,7 +162,7 @@ def _render_raw_data_expanders(records: list[dict], limit: int = 5):
         when_kst = _to_kst_str(r.get("analyzed_at", ""))
         action = r.get("decision_action", "-") or "-"
 
-        with st.expander(f"📅 {when_kst}  ·  {action}", expanded=False):
+        with st.expander(f"📅 {when_kst}  ·  {td(action)}", expanded=False):
             st.markdown(t("hist_future_path_header"))
             if fp:
                 has_any = True
@@ -188,9 +188,9 @@ def _render_raw_data_expanders(records: list[dict], limit: int = 5):
             st.markdown(t("hist_flow_header"))
             if flow.get("verdict"):
                 has_any = True
-                st.markdown(f"- {t('hist_flow_summary')}: **{flow['verdict']}**")
+                st.markdown(f"- {t('hist_flow_summary')}: **{td(flow['verdict'])}**")
                 for sig in (flow.get("signals") or [])[:3]:
-                    st.caption(f"  · {sig}")
+                    st.caption(f"  · {td(sig)}")
             else:
                 st.caption(t("hist_flow_no_data"))
 
@@ -471,7 +471,13 @@ def load_history_records(db) -> dict:
         if r["stock_code"] not in holding_codes and r["stock_code"] not in watch_codes
     ]
     auto_hold_records += orphan_auto
-    manual_records = [r for r in all_records if r.get("snapshot_type") != "scheduled"]
+    # manual은 보유/관심 외 종목만 (보유/관심이면 자동 카테고리로 자동 분류됨)
+    manual_records = [
+        r for r in all_records
+        if r.get("snapshot_type") != "scheduled"
+        and r.get("stock_code") not in holding_codes
+        and r.get("stock_code") not in watch_codes
+    ]
 
     return {
         "auto_hold": auto_hold_records,

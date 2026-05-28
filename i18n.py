@@ -839,6 +839,56 @@ def t(key: str, **kwargs) -> str:
     return text
 
 
+# ──────────────────────────────────────────
+# 동적 텍스트 매핑 (DB/analyzer가 한국어로 생성하는 verdict, action, 의견 등)
+# 키 없이 한글 문자열 자체를 lookup → 번체로 변환. 매핑 없으면 원본 반환.
+# ──────────────────────────────────────────
+DYNAMIC_KO_TO_TW: dict[str, str] = {
+    # 수급 verdict (market_context.detect_flow_reversal)
+    "✅ 외국인 매수 전환 — 단기 강세 시그널": "✅ 外資買入轉換 — 短期強勢訊號",
+    "⚠️ 외국인 매도 전환 — 단기 약세 시그널": "⚠️ 外資賣出轉換 — 短期弱勢訊號",
+    "🟢 외인+기관 동반 매수 — 강력한 매수 시그널": "🟢 外資+機構同步買入 — 強烈買入訊號",
+    "🔴 외인+기관 동반 매도 — 강한 약세 시그널": "🔴 外資+機構同步賣出 — 強烈賣出訊號",
+    "🟡 외인/기관 분리 (혼조)": "🟡 外資/機構分離 (盤整)",
+    # 일목 의사결정 (chart_ichimoku.make_decision)
+    "🔥 강력 매수 (삼역호전)": "🔥 強烈買入 (三役好轉)",
+    "✅ 매수 우호 (삼역호전 — RSI 70+ 분할 진입)": "✅ 偏多 (三役好轉 — RSI 70+ 分批進場)",
+    "⚠️ 과매수 진입 신중 (삼역호전 but RSI≥75)": "⚠️ 超買謹慎進場 (三役好轉 but RSI≥75)",
+    "✅ 매수 우호 (구름 위 + TK 골든)": "✅ 偏多 (雲上 + TK 黃金交叉)",
+    "➖ 관망 (구름 위지만 과매수)": "➖ 觀望 (雲上但超買)",
+    "➖ 관망 (방향성 불명확)": "➖ 觀望 (方向不明)",
+    "⚠️ 매도 우호 (구름 아래 + TK 데드)": "⚠️ 偏空 (雲下 + TK 死叉)",
+    "🚨 강력 매도 (삼역역전)": "🚨 強烈賣出 (三役逆轉)",
+    # 시그널 prefix (단편)
+    "🟢 외인+기관 동반 매수": "🟢 外資+機構同步買入",
+    "🟢 수급 매수 전환": "🟢 籌碼買入轉換",
+    "🔴 외인+기관 동반 매도": "🔴 外資+機構同步賣出",
+    "🔴 수급 매도 전환": "🔴 籌碼賣出轉換",
+    # 보유자 액션 일부 (확장)
+    "⚠ 외국인 매도 전환 — 단기 약세 시그널": "⚠ 外資賣出轉換 — 短期弱勢訊號",
+}
+
+
+def td(text) -> str:
+    """동적 텍스트 번역 — DB/analyzer가 한국어로 생성한 verdict/action 등.
+
+    매핑 없으면 원본(한국어) 그대로. 부분 일치 시도 (긴 매핑 우선).
+    """
+    if not text or not isinstance(text, str):
+        return text
+    if get_lang() != "zh-TW":
+        return text
+    # 완전 일치
+    if text in DYNAMIC_KO_TO_TW:
+        return DYNAMIC_KO_TO_TW[text]
+    # 부분 치환 (긴 매핑부터)
+    out = text
+    for ko, tw in sorted(DYNAMIC_KO_TO_TW.items(), key=lambda x: -len(x[0])):
+        if ko in out:
+            out = out.replace(ko, tw)
+    return out
+
+
 def language_selector(location: str = "sidebar") -> None:
     """언어 선택 UI."""
     current = get_lang()

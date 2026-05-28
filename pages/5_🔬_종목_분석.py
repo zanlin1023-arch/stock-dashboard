@@ -4,7 +4,7 @@ from __future__ import annotations
 import streamlit as st
 
 from common import init_page, get_db, sidebar_nav, nav_bar, render_macro_header
-from i18n import t
+from i18n import t, td
 
 st.set_page_config(
     page_title="종목 분석",
@@ -147,7 +147,7 @@ if analyze_btn and query:
         "STRONG_SELL": "🔴",
     }.get(decision["stance"], "⚪")
 
-    st.markdown(f"### {decision_color} {decision['action']}")
+    st.markdown(f"### {decision_color} {td(decision['action'])}")
 
     dc1, dc2, dc3 = st.columns(3)
     with dc1:
@@ -294,8 +294,20 @@ if analyze_btn and query:
             except Exception:
                 pass
 
+            # 종목이 보유/관심에 있으면 → scheduled (자동·보유/자동·관심으로 자동 분류)
+            snap_type = "manual"
+            try:
+                code6 = (code or "").zfill(6)
+                if any(((h.get("stock_code") or "").zfill(6) == code6) for h in db.list_holdings()):
+                    snap_type = "scheduled"
+                elif any(((w.get("stock_code") or "").zfill(6) == code6) for w in db.list_watchlist()):
+                    snap_type = "scheduled"
+            except Exception:
+                pass
+
             saved = db.save_analysis(
                 code, name, tech_for_db, decision, targets, swings,
+                snapshot_type=snap_type,
                 cycles=cycles, future_path=future_path, flow=flow_data,
                 pattern_match=pattern_data,
             )
@@ -318,7 +330,7 @@ if analyze_btn and query:
     # 시그널 목록
     st.subheader(t("signals"))
     for sig in result.get("signals", []):
-        st.markdown(f"- {sig}")
+        st.markdown(f"- {td(sig)}")
 
     # 이동평균 표
     with st.expander(t("moving_averages")):

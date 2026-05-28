@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
 
-from i18n import t
+from i18n import t, td
 
 
 KST = ZoneInfo("Asia/Seoul")
@@ -397,7 +397,7 @@ def _stock_card(stock: dict, mode: str = "view"):
             f"<div style='font-weight:700;color:#7A5C00;margin-bottom:4px;'>{t('rec_card_reasons')}</div>"
             + (
                 "<ul style='margin:0;padding-left:20px;color:#5A4500;'>"
-                + "".join(f"<li>{sig}</li>" for sig in signals)
+                + "".join(f"<li>{td(sig)}</li>" for sig in signals)
                 + "</ul>"
                 if signals
                 else f"<div style='color:#8A7000;'>{t('rec_card_no_reasons')}</div>"
@@ -684,7 +684,7 @@ def render_recommendations_table(recs: list[dict], session: str):
             chg = 0
         # 핵심 이유: 첫 2개만, 없으면 "데이터 부족" 표시
         if sig:
-            key_reasons = " · ".join(str(s) for s in sig[:2])
+            key_reasons = " · ".join(td(str(s)) for s in sig[:2])
         else:
             # signals 없는 종목 — 등락률 + 외인/기관 기반 fallback
             fb_parts = []
@@ -844,7 +844,7 @@ def _render_stock_detail(stock: dict, session: str):
             f"{t('rec_detail_all_reasons')}</div>"
             + (
                 "<ul style='margin:0;padding-left:20px;color:#5A4500;'>"
-                + "".join(f"<li>{sig}</li>" for sig in signals)
+                + "".join(f"<li>{td(sig)}</li>" for sig in signals)
                 + "</ul>"
                 if signals
                 else f"<div style='color:#8A7000;'>{t('rec_card_no_reasons')}</div>"
