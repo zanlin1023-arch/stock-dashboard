@@ -391,6 +391,8 @@ def project_future_path(
         if is_peak:
             buf = _buffer_for_cycle(cyc["cycle"])
             pr = raw_val * buf
+            # 피크(도달 목표)는 최소 현재가 +1% 보장 — buffer×cap로 음수 목표 방지
+            pr = max(pr, current_price * 1.01)
         else:
             pr = raw_val  # 임시 (아래에서 1차 최종가 기준 재계산)
         path.append({

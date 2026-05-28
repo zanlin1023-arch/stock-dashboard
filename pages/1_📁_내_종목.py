@@ -31,9 +31,31 @@ if db is None:
 # ──────────────────────────────────────────
 # 시세 / 메타 조회 (기존 1·2번 페이지의 캐시 함수 통합)
 # ──────────────────────────────────────────
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)  # 5분 → 1분 (장중 갱신 빠르게)
 def _fetch_current_price(code: str):
-    """현재가 + 전일대비(%) 반환."""
+    """현재가 + 전일대비(%) — 네이버 실시간 우선(장중 ~1분 지연), 실패 시 FDR 일봉."""
+    # 1차: 네이버 모바일 /basic 실시간 (closePrice=현재가, 장중 반영 빠름)
+    try:
+        import requests
+        r = requests.get(
+            f"https://m.stock.naver.com/api/stock/{code}/basic",
+            headers={"User-Agent": "Mozilla/5.0", "Referer": "https://m.stock.naver.com/"},
+            timeout=5,
+        )
+        if r.status_code == 200:
+            data = r.json() or {}
+            cur = data.get("closePrice")
+            chg = data.get("fluctuationsRatio")
+            if cur:
+                cur = float(str(cur).replace(",", ""))
+                try:
+                    chg = float(str(chg).replace(",", "")) if chg is not None else 0.0
+                except (TypeError, ValueError):
+                    chg = 0.0
+                return cur, chg
+    except Exception:
+        pass
+    # 2차: FDR 일봉 (장 마감/주말 fallback)
     try:
         import sys
         from pathlib import Path
