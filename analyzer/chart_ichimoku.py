@@ -338,27 +338,38 @@ def project_future_path(
     # active/가설 라벨 suffix
     confidence = "" if b_broken else " (가설)"
 
-    # v5: 전 시점 0.92x 일관 (v4 3차 0.94→0.92, 적중률 우선)
-    first_label, first_raw = upside[0]
-    first_target = first_raw * 0.92
-    pullback_to = current_price + (first_target - current_price) * 0.5
-    if stop:
-        pullback_to = max(pullback_to, stop[1] * 1.02)
+    # v7: 26봉도 단기 취급 (적중률 90% 목표)
+    def _buffer_for_cycle(c: int) -> float:
+        if c <= 26:
+            return 0.88  # 단기~중기: 강하게 보수
+        return 0.92      # 장기 (v5와 동일)
+
+    # raw 1차/3차 (cap 적용, buffer 미적용)
+    first_label, first_raw_capped = upside[0]
     if len(upside) >= 2:
-        third_label, third_raw = upside[1]
-        third_target = third_raw * 0.92
+        third_label, third_raw_capped = upside[1]
     else:
         third_label = first_label
-        third_target = first_raw * 0.92
+        third_raw_capped = first_raw_capped
+
+    # pullback은 1차 raw 기준 50% (cycle 무관)
+    pullback_to = current_price + (first_raw_capped * 0.92 - current_price) * 0.5
+    if stop:
+        pullback_to = max(pullback_to, stop[1] * 1.02)
 
     sequence = [
-        (first_target, f"{first_label} 도달{confidence}", True),
+        (first_raw_capped, f"{first_label} 도달{confidence}", True),
         (pullback_to, "V파동 조정", False),
-        (third_target, f"{third_label} 도전{confidence}", True),
+        (third_raw_capped, f"{third_label} 도전{confidence}", True),
     ]
 
     path = []
-    for cyc, (pr, lbl, is_peak) in zip(future_cycles, sequence):
+    for cyc, (raw_val, lbl, is_peak) in zip(future_cycles, sequence):
+        if is_peak:
+            buf = _buffer_for_cycle(cyc["cycle"])
+            pr = raw_val * buf
+        else:
+            pr = raw_val  # 조정은 buffer 적용 X
         path.append({
             "target_idx": cyc["target_idx"],
             "cycle": cyc["cycle"],
