@@ -19,7 +19,8 @@ sidebar_nav()
 render_macro_header()
 nav_bar("my_stocks")
 
-st.title(f"📁 {t('nav_my_stocks')}")
+# 타이틀: i18n 키에 이미 📁 포함되어 있어 prefix 제거 (이모지 중복 방지)
+st.title(t("nav_my_stocks"))
 
 db = get_db()
 if db is None:
@@ -67,10 +68,21 @@ def _fetch_meta(code: str, name: str) -> dict:
 
 
 # ──────────────────────────────────────────
-# 데이터 로드
+# 데이터 로드 + 병렬 prefetch (시세 + 메타) — A+C 최적화
 # ──────────────────────────────────────────
 holdings = db.list_holdings() or []
 watchlist = db.list_watchlist() or []
+
+# A: 종목별 시세 + 메타를 ThreadPool로 병렬 prefetch (캐시 워밍업)
+# C: @st.cache_data 5분 → 두 번째 진입은 즉시
+_all_codes_meta = [(h["stock_code"], h["stock_name"]) for h in holdings] + \
+                  [(w["stock_code"], w["stock_name"]) for w in watchlist]
+if _all_codes_meta:
+    from concurrent.futures import ThreadPoolExecutor
+    with st.spinner(f"⏳ 시세/섹터 조회 중 ({len(_all_codes_meta)}개)..."):
+        with ThreadPoolExecutor(max_workers=10) as _ex:
+            list(_ex.map(_fetch_current_price, [c for c, _ in _all_codes_meta]))
+            list(_ex.map(lambda x: _fetch_meta(x[0], x[1]), _all_codes_meta))
 
 
 # ──────────────────────────────────────────
