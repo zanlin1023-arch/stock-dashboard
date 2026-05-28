@@ -24,6 +24,25 @@ from chart_scenario import compute_ichimoku
 warnings.filterwarnings("ignore")
 
 
+# matplotlib 한국 폰트에 이모지 글리프 없음 → 깨짐(☒) 방지용 기호 대체
+_EMOJI_MAP = {
+    "📌": "▣", "🎯": "◆", "🛡": "▽", "💹": "■", "🔍": "※", "📖": "▤",
+    "🔥": "★", "✅": "○", "⚠️": "!", "⚠": "!", "🚨": "!!", "➖": "—",
+    "📈": "↑", "📉": "↓", "🟢": "[+]", "🔴": "[-]", "🟡": "[~]",
+    "📊": "■", "💰": "$", "🏦": "[기관]", "🌍": "[G]", "🇰🇷": "[K]",
+    "📅": "", "💡": "*",
+}
+
+
+def _safe_emoji(text: str) -> str:
+    """matplotlib에서 깨지는 이모지를 한국 폰트 지원 기호로 치환."""
+    if not text:
+        return text
+    for emo, sym in _EMOJI_MAP.items():
+        text = text.replace(emo, sym)
+    return text
+
+
 def _setup_korean_font() -> Optional[str]:
     # Linux(Streamlit Cloud): NanumGothic, Windows: Malgun Gothic
     candidates = [
@@ -639,11 +658,14 @@ def render_ichimoku_chart(
     new_bot = extreme_bot * 0.95 if extreme_bot < y_bottom else y_bottom
     ax_main.set_ylim(new_bot, new_top)
     y_top = new_top
-    for k, v in sorted_targets:
+    # 라벨 겹침 방지: 텍스트 y 위치를 최소 간격(차트 높이 6%) 확보하며 위→아래 배치
+    _y_range = y_top - new_bot
+    _min_gap = _y_range * 0.06
+    _last_label_y = None  # 직전 라벨 y (위에서부터 내려옴)
+    for k, v in sorted_targets:  # 내림차순 (E→N→V)
         meta = target_meta[k]
         pct = (v / current_price - 1) * 100
         if v > y_top:
-            # 차트 영역 밖 → 상단에 화살표 + 라벨
             ax_main.text(
                 target_x, y_top * 0.98,
                 f" ↑ {k} {meta['rank']} {v:,.0f} ({pct:+.1f}%) {meta['desc']}",
@@ -653,10 +675,16 @@ def render_ichimoku_chart(
                          edgecolor=meta["color"], alpha=0.95, linestyle="--"),
             )
         else:
+            # 점선은 실제 가격 v 위치
             ax_main.axhline(v, color=meta["color"], linestyle=":", linewidth=1.0, alpha=0.7,
                            xmin=today_x / n_total, xmax=1.0)
+            # 라벨 텍스트는 겹치지 않게 y 분산
+            label_y = v
+            if _last_label_y is not None and (_last_label_y - label_y) < _min_gap:
+                label_y = _last_label_y - _min_gap
+            _last_label_y = label_y
             ax_main.text(
-                target_x, v,
+                target_x, label_y,
                 f" {k} {meta['rank']} {v:,.0f} ({pct:+.1f}%) {meta['desc']}",
                 fontsize=10, va="center", ha="left",
                 color=meta["color"], fontweight="bold",
@@ -682,7 +710,7 @@ def render_ichimoku_chart(
                        xmin=today_x / n_total, xmax=1.0)
         ax_main.text(
             target_x, stop_val,
-            f" 🛡 손절 {stop_val:,.0f} ({pct:+.1f}%) {stop_name}",
+            f" ▽ 손절 {stop_val:,.0f} ({pct:+.1f}%) {stop_name}",
             fontsize=9.5, va="center", ha="left",
             color="#2C3E50", fontweight="bold",
             bbox=dict(boxstyle="round,pad=0.25", facecolor="white",
@@ -938,7 +966,7 @@ def render_ichimoku_chart(
             info_lines.append(f"  {k} {v:,.0f} → {lbl}")
 
     ax_main.text(
-        0.01, 0.98, "\n".join(info_lines),
+        0.01, 0.98, _safe_emoji("\n".join(info_lines)),
         transform=ax_main.transAxes,
         fontsize=10, va="top", ha="left",
         bbox=dict(boxstyle="round,pad=0.6", facecolor="white",
