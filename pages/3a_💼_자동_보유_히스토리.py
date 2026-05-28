@@ -29,10 +29,22 @@ if data.get("empty"):
     st.info(t("history_empty"))
     st.stop()
 
+# 보유 평단가 lookup (V/N/E 표시에 평단 대비 % 추가)
+holdings_map = {}
+try:
+    for h in db.list_holdings():
+        code = (h.get("stock_code") or "").zfill(6)
+        avg = h.get("avg_price")
+        if code and avg:
+            holdings_map[code] = float(avg)
+except Exception:
+    pass
+
 _render_auto_section(
     records=data["auto_hold"],
     key_prefix="auto_hold",
     caption_msg=t("hist_auto_caption"),
     empty_msg=t("hist_auto_empty"),
     records_title=t("hist_auto_records_title"),
+    holdings_map=holdings_map,
 )

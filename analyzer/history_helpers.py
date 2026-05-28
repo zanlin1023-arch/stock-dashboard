@@ -64,8 +64,13 @@ def _cycle_to_date(utc_iso: str, cycle) -> str:
         return ""
 
 
-def _render_table(records: list[dict]):
-    """공통 테이블 렌더 — 미래 경로(future_path) + 수급(flow) 컬럼 포함."""
+def _render_table(records: list[dict], holdings_map: dict | None = None):
+    """공통 테이블 렌더 — 미래 경로 + 수급 컬럼.
+
+    Args:
+        holdings_map: {stock_code: avg_price} — 보유 평단가 (보유 페이지에서만 전달)
+                       전달 시 V/N/E/1·2·3차에 평단 대비 % 추가 표시
+    """
     rows = []
     for r in records:
         # raw_data에서 future_path / flow 추출
@@ -76,15 +81,30 @@ def _render_table(records: list[dict]):
 
         _candle = t("hist_candle_unit")
         analyzed_at_iso = r.get("analyzed_at", "")
+        # 보유 평단가 lookup
+        _avg = None
+        if holdings_map and r.get("stock_code"):
+            _avg = holdings_map.get(r["stock_code"])
+            try:
+                _avg = float(_avg) if _avg else None
+            except (TypeError, ValueError):
+                _avg = None
+
+        def _avg_suffix(price_val: float) -> str:
+            """평단 대비 % suffix (보유 종목만)."""
+            if _avg and _avg > 0 and price_val:
+                pct_avg = (float(price_val) / _avg - 1) * 100
+                return f" | 평단 {pct_avg:+.1f}%"
+            return ""
 
         def _fmt_future(p: dict, ref_price: float, ref_label: str) -> str:
-            """ref_price 대비 % 계산 (ref_label로 어디 대비인지 명시)."""
+            """ref_price 대비 % + 평단 대비 %(보유시) 표시."""
             pct = (p.get("price", 0) / ref_price - 1) * 100 if ref_price else 0
             date_str = _cycle_to_date(analyzed_at_iso, p.get("cycle"))
             date_prefix = f"📅 {date_str} · " if date_str else ""
             return (
                 f"{date_prefix}+{p.get('cycle')}{_candle} · {p.get('label', '')} "
-                f"{p.get('price', 0):,.0f} ({ref_label} {pct:+.1f}%)"
+                f"{p.get('price', 0):,.0f} ({ref_label} {pct:+.1f}%{_avg_suffix(p.get('price', 0))})"
             )
 
         # 1차: 현재가 대비 / 2차(조정): 1차 대비 (음수가 맞음) / 3차: 현재가 대비
@@ -98,12 +118,12 @@ def _render_table(records: list[dict]):
         # 수급 verdict (짧게)
         flow_short = flow.get("verdict", "-") or "-"
 
-        # 일목 V/N/E 목표가 + 손절 (현재가 대비 % 함께)
+        # 일목 V/N/E 목표가 + 손절 (현재가 대비 % + 평단 대비 %)
         def _fmt_target(val):
             if not val:
                 return "-"
             pct = (float(val) / price_now - 1) * 100 if price_now else 0
-            return f"{float(val):,.0f} ({pct:+.1f}%)"
+            return f"{float(val):,.0f} ({pct:+.1f}%{_avg_suffix(val)})"
 
         # 패턴 매칭 시점별 예측 가격 (raw_data.pattern_match.projection)
         pm_data = raw.get("pattern_match") or {}
@@ -248,8 +268,12 @@ def _render_raw_data_expanders(records: list[dict], limit: int = 5):
 
 def _render_auto_section(records: list[dict], key_prefix: str,
                          caption_msg: str, empty_msg: str,
-                         records_title: str):
-    """자동 스냅샷 섹션 공통 렌더 (보유/관심 둘 다 사용)."""
+                         records_title: str,
+                         holdings_map: dict | None = None):
+    """자동 스냅샷 섹션 공통 렌더 (보유/관심 둘 다 사용).
+
+    holdings_map: {stock_code: avg_price} — 보유 페이지에서만 전달 → 평단 대비 % 표시
+    """
     st.caption(caption_msg)
     if not records:
         st.info(empty_msg)
@@ -287,7 +311,7 @@ def _render_auto_section(records: list[dict], key_prefix: str,
 
     st.divider()
     st.subheader(f"{records_title} ({len(filtered)})")
-    _render_table(filtered)
+    _render_table(filtered, holdings_map=holdings_map)
 
     # 종목별 상세 (자동은 시계열 추이가 핵심)
     if sel_x != t("filter_all") and filtered:
