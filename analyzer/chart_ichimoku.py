@@ -322,9 +322,17 @@ def ichimoku_signal(df: pd.DataFrame) -> dict:
     rsi = float(last["rsi_14"]) if "rsi_14" in df.columns and pd.notna(last.get("rsi_14")) else None
     stance, _, _ = classify_ichimoku_stance(cloud_pos, tk_bull, chikou_ok, rsi)
 
-    prev = df.iloc[-2]
-    prev_pos = _cloud_pos(float(prev["close"]), prev.get("senkou_a"), prev.get("senkou_b"))
-    fresh = cloud_pos == "above" and prev_pos in ("inside", "below") and tk_bull
+    # 매수돌파(fresh) = 최근 3봉 내 구름 상향 돌파 + 현재 구름 위 + TK골든.
+    # [이전] 딱 어제→오늘 1봉 전환만 잡아 사실상 안 떴음(돌파 당일만 포착).
+    # [변경] 직전 3봉(어제~3일전) 중 구름 아래/안이었다가 오늘 위면 '막 돌파'로 인정.
+    recent_not_above = any(
+        _cloud_pos(
+            float(df.iloc[i]["close"]),
+            df.iloc[i].get("senkou_a"), df.iloc[i].get("senkou_b"),
+        ) in ("inside", "below")
+        for i in range(-4, -1)
+    )
+    fresh = cloud_pos == "above" and tk_bull and recent_not_above
     return {"stance": stance, "fresh": fresh, "cloud_pos": cloud_pos}
 
 
