@@ -581,13 +581,17 @@ def render_ichimoku_chart(
     # 이미 compute_ichimoku에서 shift(26)으로 그려져있음 → df의 tail에서 가져오기
     extended = pd.concat([plot_df, future_df])
 
-    # 미래 영역에 선행스팬 채우기 (df의 가장 끝에서 26봉치)
+    # 미래 영역에 선행스팬 채우기 — '원본(unshifted)' 스팬의 최근 26봉을 앞으로.
+    # [이전 버그] df.senkou_a/b는 이미 26봉 shift된 값이라 그 끝 26개를 쓰면
+    #   ~27봉 과거 스팬이 미래에 들어가 구름이 추세를 못 따라감(우상향이 우하향처럼 보임).
+    # [수정] 전환·기준선과 52일 고저로 원본 스팬을 재계산해 최근 26봉을 미래로.
+    #   (과거 구름은 shift된 df 값을 그대로 써서 정확, 미래만 원본 엣지로 연결 → 연속)
     last_real_idx = len(plot_df) - 1
-    # df 원본에서 미래 26봉의 senkou_a/b를 가져와야 함
-    # senkou는 이미 +26 shift 돼있어서, df의 마지막 부분에 NaN 아닌 값 있음
     full_df = df.copy()
-    senkou_a_future = full_df["senkou_a"].iloc[-26:].values
-    senkou_b_future = full_df["senkou_b"].iloc[-26:].values
+    _raw_a = (full_df["tenkan"] + full_df["kijun"]) / 2
+    _raw_b = (full_df["high"].rolling(52).max() + full_df["low"].rolling(52).min()) / 2
+    senkou_a_future = _raw_a.iloc[-26:].values
+    senkou_b_future = _raw_b.iloc[-26:].values
     # extended의 미래 부분 처음 26봉에 채우기
     fut_a_len = min(26, len(extended) - last_real_idx - 1)
     for i in range(fut_a_len):
