@@ -71,6 +71,13 @@ def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     out["bb_upper"] = sma20 + 2 * std20
     out["bb_lower"] = sma20 - 2 * std20
 
+    # ATR(14) — Wilder smoothing (project_future_path cap용)
+    hl = out["high"] - out["low"]
+    hc = (out["high"] - out["close"].shift()).abs()
+    lc = (out["low"] - out["close"].shift()).abs()
+    tr = pd.concat([hl, hc, lc], axis=1).max(axis=1)
+    out["atr_14"] = tr.ewm(alpha=1 / 14, adjust=False).mean()
+
     # 일목균형표 (Ichimoku Kinko Hyo) — 9/26/52
     high, low, close = out["high"], out["low"], out["close"]
     out["tenkan"] = (high.rolling(9).max() + low.rolling(9).min()) / 2

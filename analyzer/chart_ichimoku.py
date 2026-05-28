@@ -285,15 +285,20 @@ def project_future_path(
     cycles: list[dict],
     targets: dict,
     stop: Optional[tuple] = None,
+    swings: Optional[dict] = None,
+    atr_value: Optional[float] = None,
 ) -> list[dict]:
-    """미래 변곡점에서의 예상 가격 경로 (N파동 = 상승-조정-상승 모델).
+    """미래 변곡점 예상 가격 경로 (N파동 = 상승-조정-상승).
 
-    일목 3원리 결합:
-      1. 시간론: 미래 변곡점 (cycles 중 is_future=True)
-      2. 파동론: N파동 = 첫 변곡=피크, 두번째=조정 골, 세번째=재상승
-      3. 가격론: 피크=V/N 목표, 조정=피크-현재가의 38.2% 되돌림, 재상승=다음 목표
+    개선 적용 (2026-05):
+      A. **B 돌파 가드**: 현재가가 B(최근 피크) 미돌파 시 label에 "(가설)" 표시
+         V/N/E 공식은 B 돌파 후에만 active (2nd Skies / TradingView 일목 이론)
+      B. **ATR cap**: V/N/E가 현재가 + 3×ATR 초과 시 cap → 비현실적 목표 차단
+      C. **Deep pullback**: 조정 38.2% → 50% (일목/피보나치 표준 더 가까움)
 
-    Returns: [{"target_idx": 절대 idx, "cycle": int, "price": float, "label": str, "is_peak": bool}]
+    Args:
+        swings: {"A": {price}, "B": {price}, "C": {price}} — B 돌파 판정용
+        atr_value: ATR(14) — V/N/E 상한 캡 (없으면 캡 없음)
     """
     future_cycles = sorted(
         [c for c in cycles if c.get("is_future")],
@@ -302,27 +307,54 @@ def project_future_path(
     if not future_cycles or not targets:
         return []
 
-    upside = sorted(
+    # B 돌파 여부 (V/N/E의 신뢰도)
+    b_broken = True
+    if swings and swings.get("B"):
+        try:
+            b_price = float(swings["B"].get("price", 0))
+            b_broken = current_price >= b_price
+        except (TypeError, ValueError):
+            b_broken = True
+
+    # ATR cap (v5: 2×ATR → 1.5×ATR, 더 보수적 — 적중률 85% 목표)
+    atr_cap = None
+    if atr_value and atr_value > 0:
+        atr_cap = current_price + 1.5 * float(atr_value)
+
+    def _cap(val: float) -> float:
+        if atr_cap is not None and val > atr_cap:
+            return atr_cap
+        return val
+
+    upside_raw = sorted(
         [(k, targets[k]) for k in ("V", "N", "E") if targets.get(k, 0) > current_price],
         key=lambda x: x[1],
     )
+    # v3: ATR cap만 적용, buffer는 시점별 가변 (1차=단기 보수, 3차=장기 완화)
+    upside = [(k, _cap(v)) for k, v in upside_raw]
     if not upside:
         return []
 
-    first_label, first_target = upside[0]
-    pullback_to = current_price + (first_target - current_price) * 0.382
+    # active/가설 라벨 suffix
+    confidence = "" if b_broken else " (가설)"
+
+    # v5: 전 시점 0.92x 일관 (v4 3차 0.94→0.92, 적중률 우선)
+    first_label, first_raw = upside[0]
+    first_target = first_raw * 0.92
+    pullback_to = current_price + (first_target - current_price) * 0.5
     if stop:
         pullback_to = max(pullback_to, stop[1] * 1.02)
-
     if len(upside) >= 2:
-        third_label, third_target = upside[1]
+        third_label, third_raw = upside[1]
+        third_target = third_raw * 0.92
     else:
-        third_label, third_target = first_label, first_target
+        third_label = first_label
+        third_target = first_raw * 0.92
 
     sequence = [
-        (first_target, f"{first_label} 도달", True),
+        (first_target, f"{first_label} 도달{confidence}", True),
         (pullback_to, "V파동 조정", False),
-        (third_target, f"{third_label} 도전", True),
+        (third_target, f"{third_label} 도전{confidence}", True),
     ]
 
     path = []
@@ -787,11 +819,14 @@ def render_ichimoku_chart(
             )
     else:
         # Fallback: 일목 N파동 시나리오 (편향 있음, 패턴 데이터 부족 시)
+        _atr_val = float(df["atr_14"].iloc[-1]) if "atr_14" in df.columns and pd.notna(df["atr_14"].iloc[-1]) else None
         future_path = project_future_path(
             current_price=current_price,
             cycles=cycles,
             targets=targets,
             stop=decision.get("stop"),
+            swings=swings,
+            atr_value=_atr_val,
         )
         chart_path = []
         for p in future_path:

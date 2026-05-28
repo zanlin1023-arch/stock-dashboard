@@ -115,8 +115,10 @@ with st.expander(t("holdings_add"), expanded=False):
 
                             # 시간 사이클 + 미래 추세 경로 + 수급 — DB 누적 분석용
                             cycles = compute_time_cycles(swings["C"]["idx"], len(df_ana))
+                            _atr_val = float(df_ana["atr_14"].iloc[-1]) if "atr_14" in df_ana.columns and df_ana["atr_14"].iloc[-1] == df_ana["atr_14"].iloc[-1] else None
                             future_path = project_future_path(
                                 decision["price"], cycles, targets, decision.get("stop"),
+                                swings=swings, atr_value=_atr_val,
                             )
                             flow_data = None
                             try:

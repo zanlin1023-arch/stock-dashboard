@@ -268,8 +268,10 @@ if analyze_btn and query:
             # 시간 사이클 + 미래 추세 + 수급 + 패턴 매칭 (DB 누적 분석용)
             from chart_ichimoku import compute_time_cycles, project_future_path
             cycles = compute_time_cycles(swings["C"]["idx"], len(df))
+            _atr_val = float(df["atr_14"].iloc[-1]) if "atr_14" in df.columns and df["atr_14"].iloc[-1] == df["atr_14"].iloc[-1] else None
             future_path = project_future_path(
                 decision["price"], cycles, targets, decision.get("stop"),
+                swings=swings, atr_value=_atr_val,
             )
             flow_data = None
             try:
