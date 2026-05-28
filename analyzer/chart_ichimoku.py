@@ -260,18 +260,31 @@ def make_decision(df: pd.DataFrame, swings: dict, targets: dict) -> dict:
         action = "➖ 관망 (방향성 불명확)"
         action_color = "#7F8C8D"
 
-    # 목표가 (현재가 위쪽만 의미있음)
-    upside_targets = sorted(
+    # ATR (목표가 cap + 손절 검증용)
+    atr = None
+    if "atr_14" in df.columns and pd.notna(df["atr_14"].iloc[-1]):
+        atr = float(df["atr_14"].iloc[-1])
+
+    # 목표가 (현재가 위 + ATR cap으로 비현실적 V/N/E 차단 — v7 일관)
+    atr_cap = price + 3 * atr if atr else None
+    upside_targets = []
+    for k, v in sorted(
         [(k, v) for k, v in targets.items() if v > price and k != "NT"],
         key=lambda x: x[1],
-    )
-    # 손절: 기준선 또는 C 저점
+    ):
+        capped = min(v, atr_cap) if atr_cap else v
+        upside_targets.append((k, capped))
+
+    # 손절: 현재가 *아래* 지지선만 (기준선이 현재가 위면 저항이지 손절 아님)
     stop_candidates = []
-    if kijun is not None:
+    if kijun is not None and kijun < price:
         stop_candidates.append(("기준선", kijun))
     if swings["C"]["price"] < price:
         stop_candidates.append(("C저점", swings["C"]["price"]))
     stop = max(stop_candidates, key=lambda x: x[1]) if stop_candidates else None
+    # 현재가 아래 지지선이 없으면 ATR 2배 손절 (업계 표준)
+    if stop is None and atr:
+        stop = ("ATR 2배", price - 2 * atr)
 
     return {
         "stance": stance,
