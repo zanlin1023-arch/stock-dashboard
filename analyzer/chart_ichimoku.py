@@ -392,7 +392,7 @@ def project_future_path(
             buf = _buffer_for_cycle(cyc["cycle"])
             pr = raw_val * buf
         else:
-            pr = raw_val  # 조정은 buffer 적용 X
+            pr = raw_val  # 임시 (아래에서 1차 최종가 기준 재계산)
         path.append({
             "target_idx": cyc["target_idx"],
             "cycle": cyc["cycle"],
@@ -400,6 +400,24 @@ def project_future_path(
             "label": lbl,
             "is_peak": is_peak,
         })
+
+    # 2차(조정) 재정렬 — 1차 최종가 기준 50% 되돌림 (항상 1차보다 낮게 → "조정" 라벨 정직)
+    if len(path) >= 2 and not path[1]["is_peak"]:
+        first_final = path[0]["price"]
+        if first_final > current_price:
+            # 정상: 1차가 현재가 위 → 조정 = 1차~현재가 50% 되돌림 (1차보다 낮음)
+            pb = current_price + (first_final - current_price) * 0.5
+            if stop:
+                pb = max(pb, stop[1] * 1.02)
+            # 단, pullback이 1차 넘으면 안 됨 (안전)
+            pb = min(pb, first_final * 0.97)
+            path[1]["price"] = float(pb)
+            path[1]["label"] = "V파동 조정"
+        else:
+            # 1차가 현재가 이하(보수적) → '조정' 의미 없음 → 약보합 라벨
+            path[1]["price"] = float(current_price * 0.98)
+            path[1]["label"] = "약보합/횡보"
+
     return path
 
 
