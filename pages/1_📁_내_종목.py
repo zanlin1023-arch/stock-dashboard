@@ -448,6 +448,37 @@ with st.expander(t("mystocks_add_section"), expanded=False):
 
 
 # ──────────────────────────────────────────
+# ✏️ 수량/평단 수정 (보유 종목)
+# ──────────────────────────────────────────
+with st.expander(t("mystocks_edit_section")):
+    hold_opts = {f"{h['stock_name']} ({h['stock_code']})": h for h in holdings}
+    if not hold_opts:
+        st.info(t("mystocks_edit_empty"))
+    else:
+        sel_edit = st.selectbox(t("mystocks_edit_target"), list(hold_opts.keys()), key="edit_select")
+        _h = hold_opts[sel_edit]
+        with st.form("edit_holding_form"):
+            ec1, ec2 = st.columns(2)
+            with ec1:
+                new_qty = st.number_input(
+                    t("holdings_col_qty"), min_value=1, step=1,
+                    value=int(_h["quantity"]),
+                )
+            with ec2:
+                new_avg = st.number_input(
+                    t("holdings_col_avg"), min_value=1, step=100,
+                    value=int(float(_h["avg_price"])),
+                )
+            if st.form_submit_button(t("btn_save"), type="primary"):
+                try:
+                    db.update_holding(_h["id"], quantity=int(new_qty), avg_price=float(new_avg))
+                    st.success(t("mystocks_edited"))
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ {e}")
+
+
+# ──────────────────────────────────────────
 # 🗑 삭제 (보유 + 관심 통합)
 # ──────────────────────────────────────────
 with st.expander(t("delete_stock")):
