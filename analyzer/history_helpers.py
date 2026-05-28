@@ -64,6 +64,28 @@ def _cycle_to_date(utc_iso: str, cycle) -> str:
         return ""
 
 
+def _holder_verdict(stance: str | None, cloud_pos: str | None = None,
+                    in_profit: bool | None = None) -> str:
+    """보유종목 관점 판단 — 이미 보유 중이라 '매수'보다 적절한 프레이밍.
+
+    - 강력매수/매수 → 추가진입 권장
+    - 관망(보유): 구름 위면 상승세 유지, 아래/안이면 지켜보기
+    - 매도: 수익 중이면 분할 익절, 손실 중이면 손절 검토 (P&L 모르면 매도 권장)
+    """
+    if stance in ("STRONG_BUY", "BUY"):
+        return t("hist_holder_add")
+    if stance in ("SELL", "STRONG_SELL"):
+        if in_profit is True:
+            return t("hist_holder_take_profit")
+        if in_profit is False:
+            return t("hist_holder_cut_loss")
+        return t("hist_holder_sell")
+    # NEUTRAL = 보유
+    if cloud_pos == "above":
+        return t("hist_holder_hold_up")
+    return t("hist_holder_hold_watch")
+
+
 def _render_table(records: list[dict], holdings_map: dict | None = None):
     """공통 테이블 렌더 — 미래 경로 + 수급 컬럼.
 
@@ -98,14 +120,21 @@ def _render_table(records: list[dict], holdings_map: dict | None = None):
             return ""
 
         def _fmt_future(p: dict, ref_price: float, ref_label: str) -> str:
-            """ref_price 대비 % + 평단 대비 %(보유시) 표시."""
-            pct = (p.get("price", 0) / ref_price - 1) * 100 if ref_price else 0
+            """간결 표시: 📅날짜 · 가격 (평단 또는 현재가 대비 %).
+
+            [이전] +N봉 · 라벨(V파동 조정 등) + '1차 대비 %'까지 붙어 너무 길었음.
+            요청으로 봉수·라벨·상대(1차 대비) 표기 제거, 핵심만 남김.
+            """
+            price = p.get("price", 0)
             date_str = _cycle_to_date(analyzed_at_iso, p.get("cycle"))
             date_prefix = f"📅 {date_str} · " if date_str else ""
-            return (
-                f"{date_prefix}+{p.get('cycle')}{_candle} · {p.get('label', '')} "
-                f"{p.get('price', 0):,.0f} ({ref_label} {pct:+.1f}%{_avg_suffix(p.get('price', 0))})"
-            )
+            if _avg and _avg > 0 and price:
+                tail = f" (평단 {(float(price) / _avg - 1) * 100:+.1f}%)"
+            elif price_now and price:
+                tail = f" (현재가 {(price / price_now - 1) * 100:+.1f}%)"
+            else:
+                tail = ""
+            return f"{date_prefix}{price:,.0f}{tail}"
 
         # 1차: 현재가 대비 / 2차(조정): 1차 대비 (음수가 맞음) / 3차: 현재가 대비
         future_1st = _fmt_future(fp[0], price_now, "현재가") if fp else "-"
@@ -165,7 +194,15 @@ def _render_table(records: list[dict], holdings_map: dict | None = None):
                 "below": t("hist_cloud_below"),
                 "inside": t("hist_cloud_inside"),
             }.get(r.get("cloud_position", ""), "-"),
-            t("hist_col_decision"): td(r.get("decision_action", "-") or "-"),
+            t("hist_col_decision"): (
+                _holder_verdict(
+                    r.get("decision_stance"),
+                    cloud_pos=r.get("cloud_position"),
+                    in_profit=(price_now > _avg) if (_avg and price_now) else None,
+                )
+                if holdings_map is not None
+                else td(r.get("decision_action", "-") or "-")
+            ),
             # 🔬 패턴 매칭 시점별 예측 가격 (실데이터 기반 — 일목 V/N/E 공식 대체)
             t("hist_col_pattern_5d"): _fmt_pattern(5),
             t("hist_col_pattern_10d"): _fmt_pattern(10),

@@ -583,6 +583,13 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "hist_col_rsi": {"ko": "RSI", "zh-TW": "RSI"},
     "hist_col_cloud": {"ko": "구름", "zh-TW": "雲層"},
     "hist_col_decision": {"ko": "판단", "zh-TW": "判斷"},
+    # 보유종목 전용 판단 (추가진입/보유/매도)
+    "hist_holder_add": {"ko": "🟢 추가진입 권장", "zh-TW": "🟢 建議加倉"},
+    "hist_holder_hold_up": {"ko": "🟢 보유 (상승세 유지)", "zh-TW": "🟢 持有 (升勢延續)"},
+    "hist_holder_hold_watch": {"ko": "🟡 보유 (지켜보기)", "zh-TW": "🟡 持有 (觀察)"},
+    "hist_holder_take_profit": {"ko": "💰 분할 익절", "zh-TW": "💰 分批獲利了結"},
+    "hist_holder_cut_loss": {"ko": "🔴 손절 검토", "zh-TW": "🔴 檢討停損"},
+    "hist_holder_sell": {"ko": "🔻 매도 권장", "zh-TW": "🔻 建議賣出"},
     "hist_col_future_1st": {"ko": "📅 1차 (+9봉≈2주, 피크)", "zh-TW": "📅 第1 (+9日≈2週, 高峰)"},
     "hist_col_future_2nd": {"ko": "📅 2차 (+17봉≈3.5주, 조정)", "zh-TW": "📅 第2 (+17日≈3.5週, 回調)"},
     "hist_col_future_3rd": {"ko": "📅 3차 (+26봉≈5주, 재상승)", "zh-TW": "📅 第3 (+26日≈5週, 再上漲)"},

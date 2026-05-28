@@ -671,12 +671,22 @@ def render_session_recommendations(db, session: str):
     total = len(recs)
     sessions_in_data = sorted({r.get("session") for r in recs if r.get("session")})
 
-    sc1, sc2, sc3, sc4 = st.columns(4)
-    sc1.metric(t("rec_date"), target_date)
-    sc2.metric(t("rec_total"), f"{total}{t('rec_unit_count')}")
-    sc3.metric(t("rec_session_count"), ", ".join(sessions_in_data) or "-")
+    # st.metric은 값 폰트가 커서(~2.25rem) 컴팩트 커스텀 카드로 대체
     recommended_at = to_kst_str(recs[0].get("recommended_at", ""))
-    sc4.metric(t("rec_analyzed_at_kst"), recommended_at)
+    _metrics = [
+        (t("rec_date"), str(target_date)),
+        (t("rec_total"), f"{total}{t('rec_unit_count')}"),
+        (t("rec_session_count"), ", ".join(sessions_in_data) or "-"),
+        (t("rec_analyzed_at_kst"), recommended_at),
+    ]
+    for _col, (_lbl, _val) in zip(st.columns(4), _metrics):
+        _col.markdown(
+            f"<div style='line-height:1.3'>"
+            f"<div style='font-size:0.72rem;color:#8a8a8a'>{_lbl}</div>"
+            f"<div style='font-size:1.05rem;font-weight:700;color:#262730'>{_val}</div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
     # 7일 추이 분석 (옵션)
     if st.session_state.get(f"show_trend_{session}"):
