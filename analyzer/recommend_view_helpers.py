@@ -398,8 +398,13 @@ def render_market_regime():
     지수가 구름 아래면 개별 매수신호 신뢰도가 낮으니 신중 안내.
     """
     reg = get_market_regime_cached()
-    kr = [f"**{n}** {reg[n]['label']}" for n in ("KOSPI", "KOSDAQ") if reg.get(n)]
-    us = [f"**{n}** {reg[n]['label']}" for n in ("S&P500", "NASDAQ") if reg.get(n)]
+
+    def _fmt(n: str) -> str:
+        r = reg[n]
+        return f"**{n}** {r['label']} {r.get('change', 0):+.1f}%"
+
+    kr = [_fmt(n) for n in ("KOSPI", "KOSDAQ") if reg.get(n)]
+    us = [_fmt(n) for n in ("S&P500", "NASDAQ") if reg.get(n)]
     if not kr and not us:
         return
     bear_kr = sum(1 for n in ("KOSPI", "KOSDAQ") if reg.get(n, {}).get("pos") == "below")

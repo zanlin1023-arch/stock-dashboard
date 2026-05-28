@@ -225,13 +225,19 @@ def get_market_regime() -> dict:
             if pd.isna(sa) or pd.isna(sb):
                 continue
             top, bot = max(float(sa), float(sb)), min(float(sa), float(sb))
+            prev_close = float(df.iloc[-2]["close"]) if len(df) >= 2 else price
+            chg = (price / prev_close - 1) * 100 if prev_close else 0.0
             if price > top:
-                pos, label = "above", "🟢 강세 (구름 위)"
+                pos = "above"
+                # 구름 top 대비 +2% 미만이면 '근접·약'(겨우 걸친 상태) — 하루 급락에 깨질 수 있음
+                gap = (price / top - 1) * 100 if top else 0.0
+                label = "🟢 구름 위 (강세)" if gap >= 2 else "🟢 구름 위 (근접·약)"
             elif price < bot:
-                pos, label = "below", "🔴 약세 (구름 아래)"
+                pos, label = "below", "🔴 구름 아래 (약세)"
             else:
-                pos, label = "inside", "🟡 횡보 (구름 안)"
-            out[name] = {"pos": pos, "label": label, "close": price, "group": group}
+                pos, label = "inside", "🟡 구름 안 (횡보)"
+            out[name] = {"pos": pos, "label": label, "close": price,
+                         "change": chg, "group": group}
         except Exception:
             continue
     return out
