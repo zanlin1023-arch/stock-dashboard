@@ -6,6 +6,9 @@ config/.env
 # Reports (generated)
 reports/
 
+# Runtime logs (scheduled VBS/cron output)
+logs/
+
 # OpenDartReader auto-generated corp code cache (regenerated daily)
 docs_cache/
 
