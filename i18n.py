@@ -457,6 +457,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "ichimoku_sell": {"ko": "🔻 매도우호", "zh-TW": "🔻 偏空"},
     "ichimoku_strong_sell": {"ko": "🔴 삼역역전", "zh-TW": "🔴 三役逆轉"},
     "ichimoku_breakout_today": {"ko": "🔥 오늘 매수돌파(삼역호전)", "zh-TW": "🔥 今日突破買進(三役好轉)"},
+    # 시장 레짐 (지수 일목)
+    "market_regime_title": {"ko": "🧭 시장 레짐 (지수 일목)", "zh-TW": "🧭 市場狀態 (指數一目)"},
+    "market_regime_caution": {"ko": "약세장 — 개별 매수신호도 신중하게", "zh-TW": "空頭 — 個別買進訊號亦需謹慎"},
     "rec_detail_select": {"ko": "🔍 종목 선택 (상세 펼침)", "zh-TW": "🔍 選擇個股 (展開詳細)"},
     "rec_detail_all_reasons": {"ko": "💡 추천 이유 (전체)", "zh-TW": "💡 推薦理由 (全部)"},
     "rec_detail_horizon_label": {"ko": "📊 관점", "zh-TW": "📊 觀點"},

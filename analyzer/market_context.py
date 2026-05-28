@@ -189,6 +189,54 @@ def get_usd_krw() -> dict | None:
     return None
 
 
+def get_market_regime() -> dict:
+    """국내(코스피/코스닥) + 미장(S&P500/나스닥) 지수의 일목 구름 레짐.
+
+    지수가 일목 구름 위/안/아래 어디 있는지로 강세/횡보/약세 판정.
+    한국 시장은 미장에 크게 동조하므로 미장도 함께 본다.
+    Returns: {"KOSPI": {"pos","label","close","group"}, ...}  (실패 항목은 누락)
+    """
+    import datetime as _dt
+    out: dict = {}
+    try:
+        import FinanceDataReader as fdr
+        from chart_scenario import compute_ichimoku
+    except Exception:
+        return out
+
+    end = _dt.date.today()
+    start = end - _dt.timedelta(days=420)  # 52+26봉 + 여유 (휴장 포함)
+    for name, code, group in [
+        ("KOSPI", "KS11", "kr"), ("KOSDAQ", "KQ11", "kr"),
+        ("S&P500", "US500", "us"), ("NASDAQ", "IXIC", "us"),
+    ]:
+        try:
+            df = fdr.DataReader(code, start, end)
+            if df is None or df.empty:
+                continue
+            df = df.rename(columns={
+                "Open": "open", "High": "high", "Low": "low",
+                "Close": "close", "Volume": "volume",
+            })
+            df = compute_ichimoku(df)
+            last = df.iloc[-1]
+            price = float(last["close"])
+            sa, sb = last.get("senkou_a"), last.get("senkou_b")
+            if pd.isna(sa) or pd.isna(sb):
+                continue
+            top, bot = max(float(sa), float(sb)), min(float(sa), float(sb))
+            if price > top:
+                pos, label = "above", "🟢 강세 (구름 위)"
+            elif price < bot:
+                pos, label = "below", "🔴 약세 (구름 아래)"
+            else:
+                pos, label = "inside", "🟡 횡보 (구름 안)"
+            out[name] = {"pos": pos, "label": label, "close": price, "group": group}
+        except Exception:
+            continue
+    return out
+
+
 # =========================================================
 # 2. 오늘의 시장 주도 종목 (상승률/거래대금)
 # =========================================================

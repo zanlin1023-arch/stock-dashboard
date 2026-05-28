@@ -373,6 +373,47 @@ def ichimoku_sort_key(sig: dict) -> int:
 
 
 # ──────────────────────────────────────────
+# 시장 레짐 (지수 일목)
+# ──────────────────────────────────────────
+@st.cache_data(ttl=900, show_spinner=False)
+def get_market_regime_cached() -> dict:
+    """코스피/코스닥 지수 일목 레짐 (15분 캐시)."""
+    try:
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import market_context as mc
+        return mc.get_market_regime()
+    except Exception:
+        return {}
+
+
+def render_market_regime():
+    """추천 페이지 상단 시장 레짐 배너 — 국내(코스피/코스닥) + 미장(S&P500/나스닥).
+
+    지수가 구름 아래면 개별 매수신호 신뢰도가 낮으니 신중 안내.
+    """
+    reg = get_market_regime_cached()
+    kr = [f"**{n}** {reg[n]['label']}" for n in ("KOSPI", "KOSDAQ") if reg.get(n)]
+    us = [f"**{n}** {reg[n]['label']}" for n in ("S&P500", "NASDAQ") if reg.get(n)]
+    if not kr and not us:
+        return
+    bear_kr = sum(1 for n in ("KOSPI", "KOSDAQ") if reg.get(n, {}).get("pos") == "below")
+    lines = [f"**{t('market_regime_title')}**"]
+    if kr:
+        lines.append("🇰🇷 " + "  ·  ".join(kr))
+    if us:
+        lines.append("🇺🇸 " + "  ·  ".join(us))
+    body = "\n\n".join(lines)
+    if bear_kr == 2:
+        st.error(f"{body}\n\n→ {t('market_regime_caution')}")
+    elif bear_kr == 1:
+        st.warning(body)
+    else:
+        st.info(body)
+
+
+# ──────────────────────────────────────────
 # 동종업종 비교 캐시
 # ──────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -627,6 +668,9 @@ def render_session_recommendations(db, session: str):
 
     # 오늘 세션별 진도 카드 (3개 모두 표시 — 다른 세션 상태 알려주는 정보)
     render_session_progress(db, now)
+
+    # 시장 레짐 (코스피/코스닥 지수 일목) — 개별 신호 신뢰도 가늠용
+    render_market_regime()
 
     # 저장된 날짜 목록
     saved_dates = db.list_recommendation_dates(limit=30)
