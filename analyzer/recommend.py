@@ -403,6 +403,53 @@ def _claude_sector_mapping(movers: list[dict]) -> dict:
     return {}
 
 
+def _claude_news_analysis() -> dict:
+    """Claude API로 당일 시장 뉴스 → 한국 수혜/리스크 섹터 매핑.
+
+    네이버 메인 뉴스 헤드라인 → Claude Haiku가 섹터 영향 분석.
+    Returns: {"strong": [...], "weak": [...]} / 키 없거나 실패 시 {}
+    """
+    import os
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return {}
+    try:
+        news = mc.get_market_news(limit=12) or []
+        titles = [n.get("title", "") for n in news if n.get("title")]
+        if len(titles) < 3:
+            return {}
+        headlines = "\n".join(f"- {t}" for t in titles[:12])
+        prompt = f"""오늘 한국 증시 주요 뉴스 헤드라인:
+{headlines}
+
+이 뉴스들이 오늘 한국 코스피/코스닥 섹터에 미칠 영향을 분석해줘.
+- 전쟁/지정학/유가/금리/규제/실적 등 거시·이벤트 관점
+- 수혜 섹터 (오를 가능성) / 리스크 섹터 (내릴 가능성)
+- 한국 KSIC 업종명 기준 (예: "반도체와반도체장비", "방위산업", "정유", "항공운송")
+- 각 최대 4개, 뉴스에 근거 없으면 빈 배열
+
+오직 JSON만: {{"strong": ["섹터1"], "weak": ["섹터2"]}}"""
+        from anthropic import Anthropic
+        client = Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=400,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = resp.content[0].text if resp.content else ""
+        import json, re
+        m = re.search(r"\{.*?\}", text, re.DOTALL)
+        if m:
+            data = json.loads(m.group())
+            return {
+                "strong": list(data.get("strong") or [])[:4],
+                "weak": list(data.get("weak") or [])[:4],
+            }
+    except Exception as e:
+        print(f"[WARN] Claude 뉴스 분석 실패: {e}")
+    return {}
+
+
 def get_overnight_context() -> dict:
     """morning 추천용 — 미장 종합 지수 + 환율 + Claude 섹터 매핑.
 
@@ -420,7 +467,10 @@ def get_overnight_context() -> dict:
     out = {
         "available": False, "global_score": 0,
         "fx_krw": 0, "fx_change_pct": 0,
+        "wti_change": 0, "vix": 0, "vix_change": 0, "bond10y_change": 0,
+        "vix_gate": 0,  # VIX 공포 게이트 (전 종목 페널티)
         "strong_sectors": [], "weak_sectors": [],
+        "news_strong": [], "news_weak": [],  # Claude 뉴스 분석
         "details": [],
     }
     try:
@@ -477,7 +527,51 @@ def get_overnight_context() -> dict:
         except Exception:
             pass
 
-        # 🤖 Claude API로 미장 → 한국 섹터 동조 매핑 (선택, ANTHROPIC_API_KEY 있을 때만)
+        # ── [A] 거시 지표: 유가(WTI) / VIX / 미국채 10년 ──
+        def _chg(sym):
+            try:
+                d = fdr.DataReader(sym, start, end)
+                if len(d) >= 2:
+                    c, p = float(d.iloc[-1]["Close"]), float(d.iloc[-2]["Close"])
+                    return c, (c / p - 1) * 100
+            except Exception:
+                pass
+            return None, None
+
+        # 유가 (정유/조선 ↑ vs 항공/운송 ↓)
+        _, wti_chg = _chg("CL=F")
+        if wti_chg is not None:
+            out["wti_change"] = wti_chg
+            if wti_chg >= 3:
+                out["details"].append(f"🛢 유가 급등 (+{wti_chg:.1f}%) → 정유/조선 우대")
+            elif wti_chg <= -3:
+                out["details"].append(f"🛢 유가 급락 ({wti_chg:.1f}%) → 항공/운송 우대")
+
+        # 미국채 10년 (성장주 ↓ vs 금융 ↑)
+        _, bond_chg = _chg("US10YT")
+        if bond_chg is not None:
+            out["bond10y_change"] = bond_chg
+            if bond_chg >= 2:
+                out["details"].append(f"📈 美금리 급등 (+{bond_chg:.1f}%) → 성장주 부담/금융 우대")
+            elif bond_chg <= -2:
+                out["details"].append(f"📉 美금리 급락 ({bond_chg:.1f}%) → 성장주 우대")
+
+        # ── [C] VIX 공포 게이트 ──
+        vix_val, vix_chg = _chg("VIX")
+        if vix_val is not None:
+            out["vix"] = vix_val
+            out["vix_change"] = vix_chg or 0
+            if vix_val >= 30:
+                out["vix_gate"] = -15
+                out["details"].append(f"😱 VIX {vix_val:.1f} 극공포 → 전 종목 -15 (대형주 방어)")
+            elif vix_val >= 25:
+                out["vix_gate"] = -10
+                out["details"].append(f"⚠️ VIX {vix_val:.1f} 공포 → 전 종목 -10 (보수 모드)")
+            elif vix_val >= 20:
+                out["vix_gate"] = -5
+                out["details"].append(f"VIX {vix_val:.1f} 경계 → 전 종목 -5")
+
+        # ── 🤖 [Claude] 미장 → 한국 섹터 동조 매핑 ──
         try:
             us_movers = _get_us_movers()
             mapping = _claude_sector_mapping(us_movers)
@@ -485,13 +579,22 @@ def get_overnight_context() -> dict:
                 out["strong_sectors"] = mapping.get("strong", [])
                 out["weak_sectors"] = mapping.get("weak", [])
                 if out["strong_sectors"]:
-                    out["details"].append(
-                        f"🤖 Claude 매핑 강세 후보: {', '.join(out['strong_sectors'])}"
-                    )
+                    out["details"].append(f"🤖 Claude 미장 매핑 강세: {', '.join(out['strong_sectors'])}")
                 if out["weak_sectors"]:
-                    out["details"].append(
-                        f"🤖 Claude 매핑 약세 후보: {', '.join(out['weak_sectors'])}"
-                    )
+                    out["details"].append(f"🤖 Claude 미장 매핑 약세: {', '.join(out['weak_sectors'])}")
+        except Exception:
+            pass
+
+        # ── 🤖 [B] Claude 당일 뉴스 분석 → 리스크/수혜 섹터 ──
+        try:
+            news_map = _claude_news_analysis()
+            if news_map:
+                out["news_strong"] = news_map.get("strong", [])
+                out["news_weak"] = news_map.get("weak", [])
+                if out["news_strong"]:
+                    out["details"].append(f"📰 뉴스 수혜 섹터: {', '.join(out['news_strong'])}")
+                if out["news_weak"]:
+                    out["details"].append(f"📰 뉴스 리스크 섹터: {', '.join(out['news_weak'])}")
         except Exception:
             pass
 
@@ -552,6 +655,46 @@ def _apply_overnight_bonus(stock: dict, ctx: dict) -> dict:
             extra_signals.append(f"⚠ {weak_sec} (미장 동조 약세) -10")
             break
 
+    # [A] 유가 → 정유/조선 vs 항공/운송
+    wti = ctx.get("wti_change", 0)
+    if wti >= 3:
+        if any(k in sector for k in ("정유", "조선", "에너지", "화학")):
+            bonus += 8; extra_signals.append(f"🛢 유가 급등 + 정유/조선 +8")
+        elif any(k in sector for k in ("항공", "운송", "해운")):
+            bonus -= 6; extra_signals.append(f"🛢 유가 급등 + 항공/운송 -6")
+    elif wti <= -3:
+        if any(k in sector for k in ("항공", "운송", "해운")):
+            bonus += 6; extra_signals.append(f"🛢 유가 급락 + 항공/운송 +6")
+
+    # [A] 美금리 → 성장주 vs 금융
+    bond = ctx.get("bond10y_change", 0)
+    if bond >= 2:
+        if any(k in sector for k in ("제약", "바이오", "소프트웨어", "인터넷", "게임")):
+            bonus -= 8; extra_signals.append(f"📈 美금리 급등 + 성장주 -8")
+        elif any(k in sector for k in ("은행", "금융", "보험", "증권")):
+            bonus += 5; extra_signals.append(f"📈 美금리 급등 + 금융 +5")
+    elif bond <= -2:
+        if any(k in sector for k in ("제약", "바이오", "소프트웨어", "인터넷", "게임")):
+            bonus += 6; extra_signals.append(f"📉 美금리 급락 + 성장주 +6")
+
+    # [B] Claude 뉴스 분석 → 수혜/리스크 섹터
+    for ns in ctx.get("news_strong", []):
+        if ns and ns in sector:
+            bonus += 10; extra_signals.append(f"📰 {ns} (뉴스 수혜) +10")
+            break
+    for nw in ctx.get("news_weak", []):
+        if nw and nw in sector:
+            bonus -= 10; extra_signals.append(f"📰 {nw} (뉴스 리스크) -10")
+            break
+
+    # [C] VIX 공포 게이트 — 전 종목 페널티 (대형주는 절반 방어)
+    vix_gate = ctx.get("vix_gate", 0)
+    if vix_gate < 0:
+        mc_eok = stock.get("market_cap_eok", 0)
+        gate = vix_gate // 2 if mc_eok >= 50_000 else vix_gate  # 대형주 방어
+        bonus += gate
+        extra_signals.append(f"😱 VIX 게이트 {gate} (시총 {'대형방어' if mc_eok>=50000 else '일반'})")
+
     if bonus:
         stock["score"] = int(stock.get("score", 0)) + bonus
         stock["total_score"] = float(stock.get("total_score", 0)) + bonus
@@ -574,7 +717,12 @@ def recommend(top_n_per_tier: int = 3, exclude: set | None = None,
     6. Tier별 상위 N개 반환
     """
     excluded = exclude if exclude is not None else EXCLUDED_HOLDINGS
-    overnight_ctx = get_overnight_context() if session == "morning" else {"available": False}
+    # morning + evening 모두 거시 반영. 단 미장 종합(global_score)은 morning만 유효
+    overnight_ctx = {"available": False}
+    if session in ("morning", "evening"):
+        overnight_ctx = get_overnight_context()
+        if session == "evening":
+            overnight_ctx["global_score"] = 0  # evening(21시)엔 당일 미장 미개장
 
     print(f"[*] 동적 후보 수집 중 (시장 현재 상태)...")
     candidates = collect_active_stocks(top_n=n_per_source)
@@ -600,8 +748,8 @@ def recommend(top_n_per_tier: int = 3, exclude: set | None = None,
                 change_pct=stock_info.get("change_pct", "0"),
             )
             result["sources"] = info["sources"]
-            # morning 한정 미장/환율 보너스 적용
-            if session == "morning" and overnight_ctx.get("available"):
+            # morning/evening 거시 보너스 적용 (미장/환율/유가/VIX/금리/뉴스)
+            if overnight_ctx.get("available"):
                 result = _apply_overnight_bonus(result, overnight_ctx)
             evaluated.append(result)
             processed += 1
