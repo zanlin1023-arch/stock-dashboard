@@ -12,8 +12,10 @@ import streamlit as st
 def render_zoomable_image(image_path, alt: str = "차트"):
     """확대 가능한 차트 이미지.
 
-    - 호버 시 마우스 위치 중심으로 2.4배 확대 (zoom-in 커서)
-    - 우상단 '🔍 새 탭에서 원본' 버튼: 클릭 시 PNG 원본을 새 탭에서 풀사이즈로
+    - 클릭 → 마우스 지점 기준 2.4배 확대
+    - 확대 상태에서 마우스를 움직이면 그 방향으로 패닝(좌우/상하 이동)
+    - 다시 클릭 → 원래 크기
+    - 우상단 '🔍 원본 새 탭' 버튼: PNG 원본을 새 탭에서 풀사이즈로
     """
     import streamlit.components.v1 as components
     p = Path(image_path)
@@ -44,11 +46,11 @@ def render_zoomable_image(image_path, alt: str = "차트"):
             }}
             .zoom-img {{
                 width: 100%; display: block; cursor: zoom-in;
-                transition: transform 0.25s ease;
+                transition: transform 0.18s ease;
                 transform-origin: var(--ox, 50%) var(--oy, 50%);
             }}
-            /* 클릭 시 토글: zoomed 클래스가 있을 때만 확대 */
-            .zoom-img.zoomed {{ transform: scale(2.4); cursor: zoom-out; }}
+            /* 확대 상태: 마우스 이동에 즉시 반응하도록 transition 제거(패닝) */
+            .zoom-img.zoomed {{ transform: scale(2.4); cursor: move; transition: none; }}
             .zoom-toolbar {{
                 position: absolute; top: 10px; right: 10px; z-index: 10;
                 display: flex; gap: 6px;
@@ -68,15 +70,15 @@ def render_zoomable_image(image_path, alt: str = "차트"):
                 font-family: -apple-system, "Malgun Gothic", sans-serif;
             }}
         </style>
-        <div class="zoom-wrap">
+        <div class="zoom-wrap" id="zwrap"
+             onmousemove="var im=document.getElementById('zimg'); var r=this.getBoundingClientRect(); var fx=Math.min(100,Math.max(0,(event.clientX-r.left)/r.width*100)); var fy=Math.min(100,Math.max(0,(event.clientY-r.top)/r.height*100)); im.style.setProperty('--ox', fx+'%'); im.style.setProperty('--oy', fy+'%');">
             <div class="zoom-toolbar">
                 <a class="zoom-btn" href="data:image/png;base64,{img_b64}" target="_blank">🔍 원본 새 탭</a>
             </div>
             <img id="zimg" class="zoom-img" src="data:image/png;base64,{img_b64}" alt="{alt}"
-                 onmousemove="if(this.classList.contains('zoomed')) return; this.style.setProperty('--ox', (event.offsetX / this.offsetWidth * 100) + '%'); this.style.setProperty('--oy', (event.offsetY / this.offsetHeight * 100) + '%');"
-                 onclick="this.style.setProperty('--ox', (event.offsetX / this.offsetWidth * 100) + '%'); this.style.setProperty('--oy', (event.offsetY / this.offsetHeight * 100) + '%'); this.classList.toggle('zoomed');"
+                 onclick="this.classList.toggle('zoomed');"
             />
-            <div class="zoom-hint">💡 차트 클릭 → 확대 / 다시 클릭 → 원래 크기</div>
+            <div class="zoom-hint">💡 클릭 → 확대 · 확대 상태에서 마우스 좌우 이동 → 패닝 · 다시 클릭 → 원래대로</div>
         </div>
         """,
         height=height,
