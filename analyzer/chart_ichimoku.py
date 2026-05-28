@@ -686,13 +686,15 @@ def render_ichimoku_chart(
     b = extended["senkou_b"].values
     valid = ~(np.isnan(a) | np.isnan(b))
     if valid.any():
+        # 양운(A≥B)=상승 초록 / 음운(A<B)=하락 빨강. 한국식 빨강(상승)캔들과
+        # 겹치는 음운은 채도 낮은 파스텔로 가독성 확보.
         ax_main.fill_between(
             x_idx, a, b, where=(a >= b) & valid,
-            color="#FFE5B4", alpha=0.60,
+            color="#B7E4C7", alpha=0.55,
         )
         ax_main.fill_between(
             x_idx, a, b, where=(a < b) & valid,
-            color="#D4E6F1", alpha=0.60,
+            color="#F5B7B1", alpha=0.55,
         )
         ax_main.plot(x_idx, a, color="#E67E22", linewidth=0.7, alpha=0.8)
         ax_main.plot(x_idx, b, color="#5DADE2", linewidth=0.7, alpha=0.8)
