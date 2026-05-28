@@ -621,10 +621,20 @@ def recommend(top_n_per_tier: int = 3, exclude: set | None = None,
     for tier in by_tier:
         by_tier[tier].sort(key=lambda x: -x.get("total_score", x.get("score", 0)))
 
+    # 최소 점수 컷오프 — tier 강제 채우기로 저점수/음수 종목이 추천되던 문제 해결
+    # tier를 못 채워도 '질 우선' (후보 부족 시 추천 수 적어짐 = 정직)
+    MIN_SCORE = 10
+
+    def _cut(lst):
+        return [
+            s for s in lst
+            if s.get("total_score", s.get("score", 0)) >= MIN_SCORE
+        ][:top_n_per_tier]
+
     return {
-        "large": by_tier["large"][:top_n_per_tier],
-        "mid": by_tier["mid"][:top_n_per_tier],
-        "small": by_tier["small"][:top_n_per_tier],
+        "large": _cut(by_tier["large"]),
+        "mid": _cut(by_tier["mid"]),
+        "small": _cut(by_tier["small"]),
         "total_scanned": len(candidates),
     }
 
