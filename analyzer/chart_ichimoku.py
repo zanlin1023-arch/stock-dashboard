@@ -344,9 +344,26 @@ def ichimoku_signal(df: pd.DataFrame) -> dict:
     # [향후 후보] 과매도(RSI < 30)가 26봉 최고 성과(+13.6%, 71.4%) — 역발상 진입 신호로
     #   활용 검토 가능(현재 미적용).
     overheated = rsi is not None and rsi >= 70
+
+    # 망치(hammer): 하락 후 긴 아래꼬리(아래꼬리≥몸통2배, 위꼬리≤몸통0.5배) — 강세반전.
+    # 캔들 패턴 백테스트(28종목·500일)에서 26봉 승률 70.5% / 평균 +12.2%로
+    # baseline(61.7% / +9.0%) 대비 유일하게 뚜렷한 강세 edge. 현재는 표시용 💡 플래그만
+    # (점수 미반영 — 유니버스 확대 재검증 + 추천 로직 재검증 통과 시 소폭 가산 검토).
+    hammer = False
+    try:
+        o_ = float(last["open"]); hi_ = float(last["high"]); lo_ = float(last["low"])
+        body = abs(price - o_)
+        b = body if body > 0 else 1e-9
+        upper = hi_ - max(o_, price)
+        lower = min(o_, price) - lo_
+        prior_decline = len(df) >= 6 and price < float(df["close"].iloc[-6])
+        hammer = lower >= 2 * b and upper <= 0.5 * b and prior_decline
+    except Exception:
+        hammer = False
+
     return {
         "stance": stance, "fresh": fresh, "cloud_pos": cloud_pos,
-        "overheated": overheated, "rsi": rsi,
+        "overheated": overheated, "rsi": rsi, "hammer": hammer,
     }
 
 

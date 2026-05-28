@@ -457,6 +457,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "ichimoku_sell": {"ko": "🔻 매도우호", "zh-TW": "🔻 偏空"},
     "ichimoku_strong_sell": {"ko": "🔴 삼역역전", "zh-TW": "🔴 三役逆轉"},
     "ichimoku_overheated": {"ko": "⚠️과열", "zh-TW": "⚠️過熱"},
+    "ichimoku_hammer": {"ko": "💡망치", "zh-TW": "💡錘子"},
     "ichimoku_breakout_today": {"ko": "🔥 오늘 매수돌파(삼역호전)", "zh-TW": "🔥 今日突破買進(三役好轉)"},
     # 시장 레짐 (지수 일목)
     "col_market": {"ko": "시장", "zh-TW": "市場"},
