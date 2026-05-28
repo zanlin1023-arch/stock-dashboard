@@ -317,6 +317,62 @@ def prefetch_meta(codes: list[str], max_workers: int = 10):
 
 
 # ──────────────────────────────────────────
+# 일목 매수 시그널 (추천/관심 공용)
+# ──────────────────────────────────────────
+@st.cache_data(ttl=900, show_spinner=False)
+def get_ichimoku_signal(code: str) -> dict:
+    """종목 코드 → 컴팩트 일목 시그널 {stance, fresh, cloud_pos} (15분 캐시)."""
+    try:
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import technical
+        from chart_scenario import compute_ichimoku
+        from chart_ichimoku import ichimoku_signal
+        df = technical.fetch_ohlcv(code, days=180)
+        df = technical.add_indicators(df)
+        df = compute_ichimoku(df)
+        return ichimoku_signal(df)
+    except Exception:
+        return {"stance": "NA", "fresh": False, "cloud_pos": None}
+
+
+def prefetch_ichimoku(codes: list[str], max_workers: int = 8) -> None:
+    """일목 시그널 캐시 병렬 워밍업 (리스트 첫 로딩 단축)."""
+    if not codes:
+        return
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        list(ex.map(get_ichimoku_signal, codes))
+
+
+def ichimoku_badge(sig: dict) -> str:
+    """일목 시그널 dict → 표시용 짧은 배지 (언어별)."""
+    if not sig:
+        return "—"
+    if sig.get("fresh"):
+        return t("ichimoku_fresh")
+    return {
+        "STRONG_BUY": t("ichimoku_strong_buy"),
+        "BUY": t("ichimoku_buy"),
+        "NEUTRAL": t("ichimoku_neutral"),
+        "SELL": t("ichimoku_sell"),
+        "STRONG_SELL": t("ichimoku_strong_sell"),
+    }.get(sig.get("stance"), "—")
+
+
+def ichimoku_sort_key(sig: dict) -> int:
+    """돌파/강매수 종목이 위로 오도록 정렬 키 (작을수록 위)."""
+    if not sig:
+        return 9
+    if sig.get("fresh"):
+        return 0
+    return {
+        "STRONG_BUY": 1, "BUY": 2, "NEUTRAL": 5, "SELL": 6, "STRONG_SELL": 7,
+    }.get(sig.get("stance"), 8)
+
+
+# ──────────────────────────────────────────
 # 동종업종 비교 캐시
 # ──────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -668,13 +724,21 @@ def render_recommendations_table(recs: list[dict], session: str):
     _c_foreign = t("rec_tbl_col_foreign5d")
     _c_inst = t("rec_tbl_col_inst5d")
     _c_reason = t("rec_tbl_col_reason")
+    _c_ichimoku = t("ichimoku_col")
 
     tier_meta = get_tier_meta()
     tier_short = {"large": tier_meta["large"][0], "mid": tier_meta["mid"][0], "small": tier_meta["small"][0]}
 
+    # 일목 시그널 병렬 워밍업 (캐시) → 루프에서 즉시 조회
+    prefetch_ichimoku([r.get("stock_code") for r in recs if r.get("stock_code")])
+
+    fresh_breakouts: list[str] = []
     rows = []
     for r in recs:
         code = r.get("stock_code")
+        ichi = get_ichimoku_signal(code) if code else {}
+        if ichi.get("fresh"):
+            fresh_breakouts.append(r.get("stock_name", "") or code)
         sig = r.get("signals") or []
         h_key, _, _ = classify_horizon(sig, change_pct=r.get("change_pct"))
         sector = _resolve_sector(code)
@@ -702,8 +766,10 @@ def render_recommendations_table(recs: list[dict], session: str):
         tier = r.get("tier", "")
         rows.append({
             "_tier_order": {"large": 0, "mid": 1, "small": 2}.get(tier, 3),
+            "_ichimoku_order": ichimoku_sort_key(ichi),
             _c_rank: r.get("rank_in_tier", 0),
             _c_stock: f"{r.get('stock_name', '')} ({code})",
+            _c_ichimoku: ichimoku_badge(ichi),
             _c_tier: tier_short.get(tier, tier),
             _c_theme: sector or "—",
             _c_price: int(float(r.get("price") or 0)) if r.get("price") else 0,
@@ -715,7 +781,17 @@ def render_recommendations_table(recs: list[dict], session: str):
             _c_reason: key_reasons,
         })
 
-    df = pd.DataFrame(rows).sort_values(["_tier_order", _c_rank]).drop("_tier_order", axis=1).reset_index(drop=True)
+    # 돌파(삼역호전) 종목 상단 강조 요약줄
+    if fresh_breakouts:
+        st.success(f"{t('ichimoku_breakout_today')}: " + ", ".join(fresh_breakouts))
+
+    # 돌파/강매수 → 상단, 그다음 tier·순위
+    df = (
+        pd.DataFrame(rows)
+        .sort_values(["_ichimoku_order", "_tier_order", _c_rank])
+        .drop(["_ichimoku_order", "_tier_order"], axis=1)
+        .reset_index(drop=True)
+    )
 
     # 행 클릭 → 선택 → 아래에 상세 펼침
     event = st.dataframe(

@@ -266,6 +266,68 @@ def compute_time_cycles(start_idx: int, total_len: int, cycles: tuple = (9, 17, 
 # ───────────────────────────────────────────────────────
 # 4. 의사결정 (지금 매수? 어디까지? 손절은?)
 # ───────────────────────────────────────────────────────
+def _cloud_pos(price: float, sa, sb) -> str | None:
+    """현재가의 구름 대비 위치 (above/inside/below)."""
+    if sa is None or sb is None or pd.isna(sa) or pd.isna(sb):
+        return None
+    top, bot = max(float(sa), float(sb)), min(float(sa), float(sb))
+    if price > top:
+        return "above"
+    if price < bot:
+        return "below"
+    return "inside"
+
+
+def classify_ichimoku_stance(cloud_pos, tk_bull, chikou_ok, rsi):
+    """일목 3조건(구름·TK·후행스팬) + RSI 가드 → (stance, action, color).
+
+    make_decision(상세 페이지)과 ichimoku_signal(리스트 뷰)이 공유하는 단일 판정기.
+    삼역호전 = 구름 위 + 전환선>기준선 + 후행스팬 우위 → STRONG_BUY.
+    """
+    if cloud_pos == "above" and tk_bull and chikou_ok:
+        if rsi is not None and rsi >= 75:
+            return "BUY", "⚠️ 과매수 진입 신중 (삼역호전 but RSI≥75)", "#F39C12"
+        if rsi is not None and rsi >= 70:
+            return "BUY", "✅ 매수 우호 (삼역호전 — RSI 70+ 분할 진입)", "#2ECC71"
+        return "STRONG_BUY", "🔥 강력 매수 (삼역호전)", "#27AE60"
+    if cloud_pos == "below" and not tk_bull and chikou_ok is False:
+        return "STRONG_SELL", "🚨 강력 매도 (삼역역전)", "#E74C3C"
+    if cloud_pos == "above" and tk_bull:
+        if rsi is not None and rsi >= 70:
+            return "NEUTRAL", "➖ 관망 (구름 위지만 과매수)", "#7F8C8D"
+        return "BUY", "✅ 매수 우호 (구름 위 + TK 골든)", "#2ECC71"
+    if cloud_pos == "below" and not tk_bull:
+        return "SELL", "⚠️ 매도 우호 (구름 아래 + TK 데드)", "#E67E22"
+    return "NEUTRAL", "➖ 관망 (방향성 불명확)", "#7F8C8D"
+
+
+def ichimoku_signal(df: pd.DataFrame) -> dict:
+    """리스트(추천/관심) 표시용 컴팩트 일목 시그널 — 목표가/손절 없이 매수신호만.
+
+    Returns:
+        {stance, fresh, cloud_pos}
+        - stance: STRONG_BUY / BUY / NEUTRAL / SELL / STRONG_SELL / NA
+        - fresh: 오늘 구름을 상향 돌파(어제는 구름 위 아님) + TK 골든 → 이미지의 'Buy Signal' 순간
+    """
+    if df is None or len(df) < 27:
+        return {"stance": "NA", "fresh": False, "cloud_pos": None}
+    last = df.iloc[-1]
+    price = float(last["close"])
+    cloud_pos = _cloud_pos(price, last.get("senkou_a"), last.get("senkou_b"))
+    tk_bull = (
+        pd.notna(last.get("tenkan")) and pd.notna(last.get("kijun"))
+        and float(last["tenkan"]) > float(last["kijun"])
+    )
+    chikou_ok = price > float(df["close"].iloc[-27])
+    rsi = float(last["rsi_14"]) if "rsi_14" in df.columns and pd.notna(last.get("rsi_14")) else None
+    stance, _, _ = classify_ichimoku_stance(cloud_pos, tk_bull, chikou_ok, rsi)
+
+    prev = df.iloc[-2]
+    prev_pos = _cloud_pos(float(prev["close"]), prev.get("senkou_a"), prev.get("senkou_b"))
+    fresh = cloud_pos == "above" and prev_pos in ("inside", "below") and tk_bull
+    return {"stance": stance, "fresh": fresh, "cloud_pos": cloud_pos}
+
+
 def make_decision(df: pd.DataFrame, swings: dict, targets: dict) -> dict:
     """일목 + 파동 기반 의사결정 가이드."""
     last = df.iloc[-1]
@@ -295,41 +357,8 @@ def make_decision(df: pd.DataFrame, swings: dict, targets: dict) -> dict:
     if "rsi_14" in df.columns and pd.notna(last.get("rsi_14")):
         rsi = float(last["rsi_14"])
 
-    # 시그널 판단 (일목 3조건 + RSI 가드)
-    if cloud_pos == "above" and tk_bull and chikou_ok:
-        if rsi is not None and rsi >= 75:
-            stance = "BUY"
-            action = "⚠️ 과매수 진입 신중 (삼역호전 but RSI≥75)"
-            action_color = "#F39C12"
-        elif rsi is not None and rsi >= 70:
-            stance = "BUY"
-            action = "✅ 매수 우호 (삼역호전 — RSI 70+ 분할 진입)"
-            action_color = "#2ECC71"
-        else:
-            stance = "STRONG_BUY"
-            action = "🔥 강력 매수 (삼역호전)"
-            action_color = "#27AE60"
-    elif cloud_pos == "below" and not tk_bull and chikou_ok is False:
-        stance = "STRONG_SELL"
-        action = "🚨 강력 매도 (삼역역전)"
-        action_color = "#E74C3C"
-    elif cloud_pos == "above" and tk_bull:
-        if rsi is not None and rsi >= 70:
-            stance = "NEUTRAL"
-            action = "➖ 관망 (구름 위지만 과매수)"
-            action_color = "#7F8C8D"
-        else:
-            stance = "BUY"
-            action = "✅ 매수 우호 (구름 위 + TK 골든)"
-            action_color = "#2ECC71"
-    elif cloud_pos == "below" and not tk_bull:
-        stance = "SELL"
-        action = "⚠️ 매도 우호 (구름 아래 + TK 데드)"
-        action_color = "#E67E22"
-    else:
-        stance = "NEUTRAL"
-        action = "➖ 관망 (방향성 불명확)"
-        action_color = "#7F8C8D"
+    # 시그널 판단 (일목 3조건 + RSI 가드) — 리스트 뷰와 공용 분류기
+    stance, action, action_color = classify_ichimoku_stance(cloud_pos, tk_bull, chikou_ok, rsi)
 
     # ATR (목표가 cap + 손절 검증용)
     atr = None

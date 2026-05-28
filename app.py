@@ -403,29 +403,49 @@ st.divider()
 # 4단 — 주의 종목 자동 감지
 # ───────────────────────────────────────────────────────
 st.subheader("🚨 " + t("alerts"))
-alerts = []
+
+# 종목당 한 줄로 합침 — 같은 종목이 RSI/구름/손익 조건을 동시에 만족해도
+# 여러 줄로 쪼개지지 않게 code 기준으로 묶고, 시그널은 ' · '로 병합.
+# 대표 이모지는 가장 시급한 시그널(prio 낮을수록 시급) 것을 사용.
+from collections import OrderedDict
+
+_alert_map: "OrderedDict[str, dict]" = OrderedDict()
+
+def _push_alert(stock: dict, emoji: str, msg: str, prio: int) -> None:
+    key = stock.get("code") or stock["name"]
+    entry = _alert_map.get(key)
+    if entry is None:
+        _alert_map[key] = {"name": stock["name"], "emoji": emoji, "msgs": [msg], "prio": prio}
+        return
+    if msg not in entry["msgs"]:
+        entry["msgs"].append(msg)
+    if prio < entry["prio"]:
+        entry["emoji"] = emoji
+        entry["prio"] = prio
+
 for s in per_stock:
     # RSI 극단
     if s["rsi"] is not None:
         if s["rsi"] >= 80:
-            alerts.append(("🔴", s["name"], f"RSI {s['rsi']:.1f} — {t('alert_overbought')}"))
+            _push_alert(s, "🔴", f"RSI {s['rsi']:.1f} — {t('alert_overbought')}", 2)
         elif s["rsi"] <= 25:
-            alerts.append(("🟢", s["name"], f"RSI {s['rsi']:.1f} — {t('alert_oversold')}"))
+            _push_alert(s, "🟢", f"RSI {s['rsi']:.1f} — {t('alert_oversold')}", 4)
     # 구름 아래 + TK 데드
     if s["cloud_pos"] == "below" and not s.get("tk_bull"):
-        alerts.append(("⚠️", s["name"], t("alert_bearish_full")))
+        _push_alert(s, "⚠️", t("alert_bearish_full"), 1)
     # 큰 손실
     if s["pnl_pct"] <= -10:
-        alerts.append(("🔻", s["name"], f"{t('alert_pnl_prefix')} {s['pnl_pct']:+.1f}% — {t('alert_review_stop')}"))
+        _push_alert(s, "🔻", f"{t('alert_pnl_prefix')} {s['pnl_pct']:+.1f}% — {t('alert_review_stop')}", 0)
     # 큰 수익
     if s["pnl_pct"] >= 20:
-        alerts.append(("🎯", s["name"], f"{t('alert_pnl_prefix')} {s['pnl_pct']:+.1f}% — {t('alert_take_profit')}"))
+        _push_alert(s, "🎯", f"{t('alert_pnl_prefix')} {s['pnl_pct']:+.1f}% — {t('alert_take_profit')}", 3)
 
-if not alerts:
+if not _alert_map:
     st.success(t("no_alerts"))
 else:
-    for emoji, name, msg in alerts:
-        st.markdown(f"- {emoji} **{name}** — {msg}")
+    # 시급한 종목(prio 낮음)부터 위로
+    for e in sorted(_alert_map.values(), key=lambda x: x["prio"]):
+        st.markdown(f"- {e['emoji']} **{e['name']}** — {' · '.join(e['msgs'])}")
 
 
 st.divider()

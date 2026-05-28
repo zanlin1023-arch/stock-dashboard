@@ -12,6 +12,12 @@ import streamlit as st
 
 from common import init_page, get_db, nav_bar, sidebar_nav, render_macro_header
 from i18n import t, td
+from analyzer.recommend_view_helpers import (
+    get_ichimoku_signal,
+    ichimoku_badge,
+    ichimoku_sort_key,
+    prefetch_ichimoku,
+)
 
 st.set_page_config(page_title="내 종목", page_icon="📁", layout="wide")
 init_page(t("nav_my_stocks"))
@@ -143,9 +149,13 @@ _lbl_pnl_pct = t("holdings_col_pnl_pct")
 _lbl_buy_date = t("holdings_col_buy_date")
 _lbl_note = t("holdings_col_note")
 _lbl_tags = t("watchlist_col_tags")
+_lbl_ichimoku = t("ichimoku_col")
 
 _type_hold = t("mystocks_type_holding")
 _type_watch = t("mystocks_type_watch")
+
+# 일목 시그널 병렬 워밍업 (보유+관심 전체)
+prefetch_ichimoku([h["stock_code"] for h in holdings] + [w["stock_code"] for w in watchlist])
 
 rows: list[dict] = []
 total_buy = 0.0
@@ -165,13 +175,16 @@ if filter_mode in ("all", "holdings"):
         total_buy += buy_amount
         total_eval += eval_amount
         themes_str = " · ".join(meta["themes"][:3])
+        _ichi = get_ichimoku_signal(h["stock_code"])
         rows.append({
             "_id": h["id"],
             "_kind": "holding",
             "_code": h["stock_code"],
             "_name": h["stock_name"],
+            "_ichimoku_order": ichimoku_sort_key(_ichi),
             _lbl_type: _type_hold,
             _lbl_stock: f"{h['stock_name']} ({h['stock_code']})",
+            _lbl_ichimoku: ichimoku_badge(_ichi),
             _lbl_sector: meta["sector"] or "-",
             _lbl_theme: themes_str or "-",
             _lbl_avg: f"{avg:,.0f}",
@@ -194,13 +207,16 @@ if filter_mode in ("all", "watchlist"):
         themes_str = " · ".join(meta["themes"][:3])
         added = w.get("added_at", "")
         added_str = added[:10] if added else "-"
+        _ichi = get_ichimoku_signal(w["stock_code"])
         rows.append({
             "_id": w["id"],
             "_kind": "watch",
             "_code": w["stock_code"],
             "_name": w["stock_name"],
+            "_ichimoku_order": ichimoku_sort_key(_ichi),
             _lbl_type: _type_watch,
             _lbl_stock: f"{w['stock_name']} ({w['stock_code']})",
+            _lbl_ichimoku: ichimoku_badge(_ichi),
             _lbl_sector: meta["sector"] or "-",
             _lbl_theme: themes_str or "-",
             _lbl_avg: "-",
@@ -247,7 +263,12 @@ if not rows:
     else:
         st.info(t("holdings_empty"))
 else:
-    df_display = pd.DataFrame(rows).drop(columns=["_id", "_kind", "_code", "_name"])
+    df_display = (
+        pd.DataFrame(rows)
+        .sort_values("_ichimoku_order", kind="stable")  # 돌파/강매수 상단
+        .drop(columns=["_id", "_kind", "_code", "_name", "_ichimoku_order"])
+        .reset_index(drop=True)
+    )
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 
 
