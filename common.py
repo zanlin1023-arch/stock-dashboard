@@ -21,13 +21,17 @@ def render_zoomable_image(image_path, alt: str = "차트"):
         st.warning(f"차트 파일 없음: {image_path}")
         return
     img_b64 = base64.b64encode(p.read_bytes()).decode()
-    # PNG 비율 → iframe height 동적 계산 (기본 720px width)
-    height = 560
+    # PNG 비율 → iframe height 동적 계산 (컨테이너 너비 1200 기준 + 80px 버퍼)
+    # 너비 가정: Streamlit wide layout에서 차트 컨테이너는 약 1000-1200px
+    height = 700
     try:
         from PIL import Image
         with Image.open(p) as im:
             w, h = im.size
-            height = int(h * (720 / w)) + 30
+            # 1200px width 기준 비율 계산 + 80px 버퍼 (toolbar + hint + margin)
+            height = int(h * (1200 / w)) + 80
+            # 최소 500, 최대 1400로 cap
+            height = max(500, min(height, 1400))
     except Exception:
         pass
 
@@ -76,7 +80,7 @@ def render_zoomable_image(image_path, alt: str = "차트"):
         </div>
         """,
         height=height,
-        scrolling=False,
+        scrolling=True,
     )
 
 
