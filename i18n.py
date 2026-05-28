@@ -894,21 +894,47 @@ DYNAMIC_KO_TO_TW: dict[str, str] = {
 }
 
 
+# 단어 단위 부분 치환 사전 — 숫자/가변부가 포함된 동적 시그널(추천 카드 등)을
+# 위해 키워드만 번체로 치환. 이모지/숫자/기호는 보존. (긴 키부터 치환)
+_TD_WORD_MAP: dict[str, str] = {
+    "외인+기관 동반 매수": "外資+機構同步買入",
+    "외인+기관 동반 매도": "外資+機構同步賣出",
+    "외인": "外資", "기관": "機構", "외국인": "外資",
+    "연속 순매수": "連續淨買入", "일 순매수": "日淨買入", "연속 매수": "連續買入",
+    "매수 전환": "買入轉換", "매도 전환": "賣出轉換",
+    "신고가": "新高", "거래량 폭증": "成交量暴增", "거래량 증가": "成交量增加",
+    "거래량": "成交量", "정배열": "均線多頭排列", "골든크로스": "黃金交叉",
+    "강세": "強勢", "양호": "良好", "과매도": "超賣", "과매수": "超買",
+    "억 매수": "億買入", "임계": "門檻", "매수": "買入", "매도": "賣出",
+    "일 연속": "日連續", "추세": "趨勢", "단기 모멘텀": "短期動能",
+    "수급": "籌碼", "분리": "分離", "혼조": "盤整",
+    # 일(day) 단위 — 숫자 뒤 카운터. 가장 짧으므로 마지막에 치환 (예: "8일" → "8日").
+    "일": "日",
+}
+
+
 def td(text) -> str:
     """동적 텍스트 번역 — DB/analyzer가 한국어로 생성한 verdict/action 등.
 
-    매핑 없으면 원본(한국어) 그대로. 부분 일치 시도 (긴 매핑 우선).
+    1) 완전 일치(DYNAMIC_KO_TO_TW) 우선 → 정확 번역.
+    2) 없으면 _TD_WORD_MAP 단어 단위 부분 치환(긴 키부터) → 숫자/가변부 보존하며
+       추천 시그널 등 동적 문자열의 한글 잔존 제거.
+    매핑 없으면 원본(한국어) 그대로. zh-TW 일 때만 동작.
     """
     if not text or not isinstance(text, str):
         return text
     if get_lang() != "zh-TW":
         return text
-    # 완전 일치
+    # 완전 일치 (정확 번역 우선)
     if text in DYNAMIC_KO_TO_TW:
         return DYNAMIC_KO_TO_TW[text]
-    # 부분 치환 (긴 매핑부터)
+    # 부분 치환 1차: 완전 매핑 키 substring (긴 매핑부터)
     out = text
     for ko, tw in sorted(DYNAMIC_KO_TO_TW.items(), key=lambda x: -len(x[0])):
+        if ko in out:
+            out = out.replace(ko, tw)
+    # 부분 치환 2차: 단어 단위 키워드 (숫자/가변부 보존, 긴 키부터)
+    for ko, tw in sorted(_TD_WORD_MAP.items(), key=lambda x: -len(x[0])):
         if ko in out:
             out = out.replace(ko, tw)
     return out

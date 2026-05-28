@@ -168,6 +168,26 @@ def compute_price_targets(A: float, B: float, C: float) -> dict:
     }
 
 
+def cap_targets(targets: dict, current_price: float, atr: float | None = None) -> dict:
+    """V/N/E를 ATR cap(현재가+3×ATR)으로 제한. 비현실적 목표 차단 (전 경로 일관용).
+
+    차트(make_decision)·page5 카드·DB 저장·히트맵·대시보드가 모두 동일한 cap된
+    목표가를 쓰도록, raw compute_price_targets 결과를 직접 표시/저장하는 모든 경로에서
+    이 헬퍼를 거치게 한다. atr 없거나 0 이하면 원본 그대로(복사본) 반환.
+    """
+    if not atr or atr <= 0:
+        return dict(targets)
+    cap = current_price + 3 * float(atr)
+    out = {}
+    for k, v in targets.items():
+        try:
+            fv = float(v)
+            out[k] = min(fv, cap) if fv > current_price else fv
+        except (TypeError, ValueError):
+            out[k] = v
+    return out
+
+
 # ───────────────────────────────────────────────────────
 # 3. 시간론 — 변곡 예측 (9/17/26봉)
 # ───────────────────────────────────────────────────────

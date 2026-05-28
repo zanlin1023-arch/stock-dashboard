@@ -86,6 +86,10 @@ def run_snapshot() -> dict:
             swings = detect_swing_points(df, lookback=min(80, len(df)))
             A, B, C = swings["A"]["price"], swings["B"]["price"], swings["C"]["price"]
             targets = compute_price_targets(A, B, C)
+            # ATR cap 통일 (전 경로 동일 목표가)
+            from chart_ichimoku import cap_targets
+            _atr_val = float(df["atr_14"].iloc[-1]) if "atr_14" in df.columns and df["atr_14"].iloc[-1] == df["atr_14"].iloc[-1] else None
+            targets = cap_targets(targets, float(df["close"].iloc[-1]), _atr_val)
             decision = make_decision(df, swings, targets)
 
             # 일목 지표 추가
@@ -93,11 +97,12 @@ def run_snapshot() -> dict:
             for col in ["tenkan", "kijun", "senkou_a", "senkou_b"]:
                 if col in df.columns and df[col].notna().any():
                     tech_for_db[col] = float(df[col].iloc[-1])
+            if _atr_val is not None:
+                tech_for_db["atr_14"] = _atr_val
 
             # 시간 사이클 + 미래 추세 + 수급 (DB 누적 분석용)
             from chart_ichimoku import compute_time_cycles, project_future_path
             cycles = compute_time_cycles(swings["C"]["idx"], len(df))
-            _atr_val = float(df["atr_14"].iloc[-1]) if "atr_14" in df.columns and df["atr_14"].iloc[-1] == df["atr_14"].iloc[-1] else None
             future_path = project_future_path(
                 decision["price"], cycles, targets, decision.get("stop"),
                 swings=swings, atr_value=_atr_val,

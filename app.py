@@ -183,6 +183,7 @@ def _analyze_one(code: str, name: str) -> dict:
         compute_ichimoku,
         detect_swing_points,
         compute_price_targets,
+        cap_targets,
         make_decision,
     )
 
@@ -202,6 +203,9 @@ def _analyze_one(code: str, name: str) -> dict:
         swings = detect_swing_points(df, lookback=min(80, len(df)))
         A, B, C = swings["A"]["price"], swings["B"]["price"], swings["C"]["price"]
         targets = compute_price_targets(A, B, C)
+        # ATR cap 통일 (대시보드 target_n도 차트와 동일한 cap 적용)
+        _atr_val = float(df["atr_14"].iloc[-1]) if "atr_14" in df.columns and df["atr_14"].iloc[-1] == df["atr_14"].iloc[-1] else None
+        targets = cap_targets(targets, price, _atr_val)
         decision = make_decision(df, swings, targets)
 
         # 수급 (캐시) + 섹터/테마 (캐시)

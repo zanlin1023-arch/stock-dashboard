@@ -339,7 +339,7 @@ with st.expander(t("mystocks_add_section"), expanded=False):
                                 import technical
                                 from chart_ichimoku import (
                                     compute_ichimoku, detect_swing_points,
-                                    compute_price_targets, make_decision,
+                                    compute_price_targets, cap_targets, make_decision,
                                     compute_time_cycles, project_future_path,
                                 )
                                 df_ana = technical.fetch_ohlcv(code, days=180)
@@ -349,21 +349,25 @@ with st.expander(t("mystocks_add_section"), expanded=False):
                                 swings = detect_swing_points(df_ana, lookback=min(80, len(df_ana)))
                                 A, B, C = swings["A"]["price"], swings["B"]["price"], swings["C"]["price"]
                                 targets = compute_price_targets(A, B, C)
-                                decision = make_decision(df_ana, swings, targets)
-
-                                tech_for_db = dict(result)
-                                for col in ["tenkan", "kijun", "senkou_a", "senkou_b"]:
-                                    if col in df_ana.columns and df_ana[col].notna().any():
-                                        tech_for_db[col] = float(df_ana[col].iloc[-1])
-
-                                # 시간 사이클 + 미래 추세 경로 + 수급
-                                cycles = compute_time_cycles(swings["C"]["idx"], len(df_ana))
+                                # ATR cap 통일 (전 경로 동일 목표가)
                                 _atr_val = (
                                     float(df_ana["atr_14"].iloc[-1])
                                     if "atr_14" in df_ana.columns
                                     and df_ana["atr_14"].iloc[-1] == df_ana["atr_14"].iloc[-1]
                                     else None
                                 )
+                                targets = cap_targets(targets, float(df_ana["close"].iloc[-1]), _atr_val)
+                                decision = make_decision(df_ana, swings, targets)
+
+                                tech_for_db = dict(result)
+                                for col in ["tenkan", "kijun", "senkou_a", "senkou_b"]:
+                                    if col in df_ana.columns and df_ana[col].notna().any():
+                                        tech_for_db[col] = float(df_ana[col].iloc[-1])
+                                if _atr_val is not None:
+                                    tech_for_db["atr_14"] = _atr_val
+
+                                # 시간 사이클 + 미래 추세 경로 + 수급
+                                cycles = compute_time_cycles(swings["C"]["idx"], len(df_ana))
                                 future_path = project_future_path(
                                     decision["price"], cycles, targets, decision.get("stop"),
                                     swings=swings, atr_value=_atr_val,

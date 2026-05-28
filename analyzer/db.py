@@ -145,6 +145,17 @@ def save_analysis(
     if not client:
         return {}
 
+    # V/N/E ATR cap 통일 — 차트/카드/대시보드와 동일한 cap된 목표가를 저장.
+    # technical 에 atr_14 가 있으면 cap, 없으면 원본 유지 (caller 가 주입).
+    try:
+        from chart_ichimoku import cap_targets as _cap_targets
+        _cur = technical.get("current_price")
+        _atr = technical.get("atr_14")
+        if targets and _cur is not None:
+            targets = _cap_targets(targets, float(_cur), _atr)
+    except Exception:
+        pass
+
     record = {
         "stock_code": stock_code,
         "stock_name": stock_name,
@@ -227,7 +238,9 @@ def save_recommendations(results: dict, session: str = "evening", target_date: s
                 "rank_in_tier": rank,
                 "stock_code": stock.get("code"),
                 "stock_name": stock.get("name"),
-                "score": int(round(float(stock.get("score") or 0))) or None,
+                # 랭킹=표시 일치: 정렬/컷오프에 쓰인 total_score(=score+momentum×0.5)를 저장.
+                # total_score 없으면 score fallback.
+                "score": int(round(float(stock.get("total_score", stock.get("score", 0)) or 0))) or None,
                 "price": int(float(stock.get("price") or 0)) or None,
                 "change_pct": _safe_num(stock.get("change_pct")),
                 "market_cap_eok": int(stock.get("market_cap_eok") or 0) or None,
