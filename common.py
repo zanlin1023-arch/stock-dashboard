@@ -201,10 +201,10 @@ def nav_bar(current_page: str = ""):
             st.switch_page("pages/4a_🌅_morning_추천.py")
     with cols[3]:
         if st.button(t("btn_holdings_short"), use_container_width=True, key=f"nav_h_{current_page}"):
-            st.switch_page("pages/1_💼_보유_종목.py")
+            st.switch_page("pages/1_📁_내_종목.py")
     with cols[4]:
         if st.button(t("btn_watchlist_short"), use_container_width=True, key=f"nav_w_{current_page}"):
-            st.switch_page("pages/2_⭐_관심_종목.py")
+            st.switch_page("pages/1_📁_내_종목.py")
 
 
 def _switch_to(page_name: str):
@@ -213,8 +213,9 @@ def _switch_to(page_name: str):
         "home": "app.py",
         "dashboard": "app.py",
         "analyze": "pages/5_🔬_종목_분석.py",
-        "holdings": "pages/1_💼_보유_종목.py",
-        "watchlist": "pages/2_⭐_관심_종목.py",
+        "holdings": "pages/1_📁_내_종목.py",
+        "watchlist": "pages/1_📁_내_종목.py",
+        "my_stocks": "pages/1_📁_내_종목.py",
         "history": "pages/3a_💼_자동_보유_히스토리.py",
         "recommend": "pages/4a_🌅_morning_추천.py",
         "compare": "pages/6_🆚_종목_비교.py",
@@ -272,8 +273,7 @@ def sidebar_nav():
         _safe_page_link("pages/4c_🌙_evening_추천.py", t("nav_rec_evening"))
         st.markdown('</div>', unsafe_allow_html=True)
 
-        _safe_page_link("pages/1_💼_보유_종목.py", t("nav_holdings"))
-        _safe_page_link("pages/2_⭐_관심_종목.py", t("nav_watchlist"))
+        _safe_page_link("pages/1_📁_내_종목.py", t("nav_my_stocks"))
 
         # 📜 분석 히스토리 + sub-nav (카테고리 3개)
         st.markdown(f"**{t('nav_history')}**")
