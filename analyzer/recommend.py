@@ -765,8 +765,78 @@ def _apply_overnight_bonus(stock: dict, ctx: dict) -> dict:
     return stock
 
 
+def _watchlist_entry_picks(excluded: set, existing_codes: set, overnight_ctx: dict) -> dict:
+    """관심종목 중 '일목 진입조건' 충족분을 tier별로 반환 (추천에 ⭐ 편입용).
+
+    진입 게이트 = 일목 stance ∈ {STRONG_BUY, BUY}
+      = 구름 위 + 전환선>기준선(TK골든) + RSI 과열 아님.
+      → 과열 급등주(예: 단기 +100% RSI≥70)는 NEUTRAL이라 자동 제외되고,
+        눌림으로 과열이 식어 깨끗한 매수 구간이 되면 그때 편입된다.
+    충족 종목엔 ⭐ 진입신호를 signals에 달아 표시·저장된다.
+    """
+    picks = {"large": [], "mid": [], "small": []}
+    try:
+        import pandas as pd
+        from analyzer import db
+        import technical
+        from chart_scenario import compute_ichimoku
+        from chart_ichimoku import ichimoku_signal
+        watch = db.list_watchlist()
+    except Exception:
+        return picks
+
+    for w in watch:
+        code = (w.get("stock_code") or "").zfill(6)
+        name = w.get("stock_name", "")
+        if not code or code in excluded or code in existing_codes:
+            continue
+        try:
+            df = technical.fetch_ohlcv(code, days=180)
+            df = technical.add_indicators(df)
+            df = compute_ichimoku(df)
+            sig = ichimoku_signal(df)
+            if sig.get("stance") not in ("STRONG_BUY", "BUY"):
+                continue  # 추세 미충족(구름 아래/TK 데드 등) → 제외
+
+            # 추격 방지 게이트: 과열·과확장이면 '눌림 대기'로 보고 제외.
+            # (일목 stance만으론 급등주도 BUY로 떠서 SK네트웍스류가 통과되는 문제 보완)
+            last = df.iloc[-1]
+            price = float(last["close"])
+            kijun = float(last["kijun"]) if pd.notna(last.get("kijun")) else 0.0
+            rsi = float(last["rsi_14"]) if pd.notna(last.get("rsi_14")) else None
+            if rsi is not None and rsi >= 70:
+                continue  # 과열 → 눌림으로 식을 때까지 대기
+            if kijun > 0 and price > kijun * 1.15:
+                continue  # 기준선 +15% 초과 = 과확장(추격) → 제외
+
+            info = get_stock_info(code)
+            mc_eok = info.get("market_cap_eok", 0)
+            if mc_eok < 500:
+                continue
+            result = evaluate_stock(
+                code, name, mc_eok,
+                price=info.get("close", 0),
+                change_pct=info.get("change_pct", "0"),
+            )
+            result["sources"] = ["⭐관심종목"]
+            result["from_watchlist"] = True
+            entry = ("⭐ 관심종목 진입신호 (삼역호전)"
+                     if sig["stance"] == "STRONG_BUY"
+                     else "⭐ 관심종목 진입신호 (매수우호)")
+            result["signals"] = [entry] + list(result.get("signals") or [])
+            if overnight_ctx.get("available"):
+                result = _apply_overnight_bonus(result, overnight_ctx)
+            tier = result.get("tier")
+            if tier in picks:
+                picks[tier].append(result)
+        except Exception:
+            continue
+    return picks
+
+
 def recommend(top_n_per_tier: int = 3, exclude: set | None = None,
-              n_per_source: int = 20, session: str = "evening") -> dict:
+              n_per_source: int = 20, session: str = "evening",
+              include_watchlist: bool = True) -> dict:
     """매번 시장 현재 상태로 동적 추천.
 
     1. 4가지 소스에서 활성 종목 수집 (~150개)
@@ -854,12 +924,27 @@ def recommend(top_n_per_tier: int = 3, exclude: set | None = None,
             if s.get("total_score", s.get("score", 0)) >= MIN_SCORE
         ][:top_n_per_tier]
 
-    return {
+    result = {
         "large": _cut(by_tier["large"]),
         "mid": _cut(by_tier["mid"]),
         "small": _cut(by_tier["small"]),
         "total_scanned": len(candidates),
     }
+
+    # 관심종목 진입조건(일목 매수 시그널) 충족분을 추천에 ⭐ 편입.
+    # 시장 스캔 top_n과 별개로 추가(녹임) — 진입 게이트가 품질 바 역할.
+    if include_watchlist:
+        existing = {s["code"] for t in ("large", "mid", "small") for s in result[t]}
+        wl = _watchlist_entry_picks(set(excluded), existing, overnight_ctx)
+        added = 0
+        for t in ("large", "mid", "small"):
+            result[t].extend(wl[t])
+            added += len(wl[t])
+        result["watchlist_added"] = added
+        if added:
+            print(f"[*] 관심종목 진입조건 충족 {added}개 추천 편입")
+
+    return result
 
 
 # =========================================================
