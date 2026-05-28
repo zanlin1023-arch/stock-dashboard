@@ -172,33 +172,24 @@ def compute_price_targets(A: float, B: float, C: float) -> dict:
 # 3. 시간론 — 변곡 예측 (9/17/26봉)
 # ───────────────────────────────────────────────────────
 def compute_time_cycles(start_idx: int, total_len: int, cycles: tuple = (9, 17, 26)) -> list[dict]:
-    """파동 시작점 기준 9/17/26봉 후 시점.
+    """A 방식 (2026-05): **현재 시점 기준** 9/17/26봉 후 (= 약 2주/3.5주/5주 후).
 
-    미래 변곡 예측이 목표이므로 이미 지난 시점은 다음 사이클(33, 42, 65, 76)로 자동 확장.
+    기존엔 start_idx(C 조정저점)부터 카운트 → C가 오래된 종목은 9/17/26봉이 이미 지나
+    42/51/65봉으로 밀려 2~3개월 후 먼 미래가 됐음. 현재 기준으로 고정해 항상 가깝게.
+    (start_idx는 호환성 위해 시그니처 유지하나 미사용)
 
-    Returns:
-        [{"cycle": 9, "target_idx": ..., "is_future": True/False}, ...]
+    Returns: [{"cycle": 9, "target_idx": 현재+9, "is_future": True}, ...]
     """
-    extended_cycles = list(cycles) + [33, 42, 51, 65, 76, 129]
-    out = []
-    used = set()
-    for c in extended_cycles:
-        if len(out) >= len(cycles):
-            break
-        t = start_idx + c
-        # 차트에 의미있는 범위: 현재 ±35봉
-        if t < total_len - 5:
-            continue  # 너무 과거 (이미 지났고 의미 없음)
-        if c in used:
-            continue
-        used.add(c)
-        out.append({
+    base = total_len - 1  # 현재(마지막 봉) 기준
+    return [
+        {
             "cycle": c,
-            "target_idx": t,
-            "is_future": t >= total_len,
-            "offset": t - (total_len - 1),
-        })
-    return out
+            "target_idx": base + c,
+            "is_future": True,
+            "offset": c,
+        }
+        for c in cycles
+    ]
 
 
 # ───────────────────────────────────────────────────────
