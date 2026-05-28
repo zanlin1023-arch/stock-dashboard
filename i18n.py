@@ -459,6 +459,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "ichimoku_overheated": {"ko": "⚠️과열", "zh-TW": "⚠️過熱"},
     "ichimoku_breakout_today": {"ko": "🔥 오늘 매수돌파(삼역호전)", "zh-TW": "🔥 今日突破買進(三役好轉)"},
     # 시장 레짐 (지수 일목)
+    "col_market": {"ko": "시장", "zh-TW": "市場"},
+    "mk_kospi": {"ko": "🟦 코스피", "zh-TW": "🟦 KOSPI"},
+    "mk_kosdaq": {"ko": "🟧 코스닥", "zh-TW": "🟧 KOSDAQ"},
     "market_regime_title": {"ko": "🧭 시장 레짐 (지수 일목)", "zh-TW": "🧭 市場狀態 (指數一目)"},
     "market_regime_caution": {"ko": "약세장 — 개별 매수신호도 신중하게", "zh-TW": "空頭 — 個別買進訊號亦需謹慎"},
     "rec_detail_select": {"ko": "🔍 종목 선택 (상세 펼침)", "zh-TW": "🔍 選擇個股 (展開詳細)"},

@@ -422,6 +422,26 @@ def render_market_regime():
         st.info(body)
 
 
+def market_label(code: str) -> str:
+    """종목 → 시장 라벨 (🟦 코스피 / 🟧 코스닥)."""
+    try:
+        import market_context as mc
+        mk = mc.get_market(code)
+    except Exception:
+        mk = ""
+    return {"KOSPI": t("mk_kospi"), "KOSDAQ": t("mk_kosdaq")}.get(mk, mk or "-")
+
+
+def market_regime_for(code: str) -> dict | None:
+    """종목의 소속 시장(코스피/코스닥) 레짐 dict — 종목별 레짐 매칭용."""
+    try:
+        import market_context as mc
+        mk = mc.get_market(code)
+    except Exception:
+        return None
+    return get_market_regime_cached().get(mk)
+
+
 # ──────────────────────────────────────────
 # 동종업종 비교 캐시
 # ──────────────────────────────────────────
@@ -788,6 +808,7 @@ def render_recommendations_table(recs: list[dict], session: str):
     _c_inst = t("rec_tbl_col_inst5d")
     _c_reason = t("rec_tbl_col_reason")
     _c_ichimoku = t("ichimoku_col")
+    _c_market = t("col_market")
 
     tier_meta = get_tier_meta()
     tier_short = {"large": tier_meta["large"][0], "mid": tier_meta["mid"][0], "small": tier_meta["small"][0]}
@@ -833,6 +854,7 @@ def render_recommendations_table(recs: list[dict], session: str):
             _c_rank: r.get("rank_in_tier", 0),
             _c_stock: f"{r.get('stock_name', '')} ({code})",
             _c_ichimoku: ichimoku_badge(ichi),
+            _c_market: market_label(code),
             _c_tier: tier_short.get(tier, tier),
             _c_theme: sector or "—",
             _c_price: int(float(r.get("price") or 0)) if r.get("price") else 0,
@@ -916,6 +938,13 @@ def _render_stock_detail(stock: dict, session: str):
     eok = t("rec_unit_eok")
 
     with st.container(border=True):
+        # 종목 소속 시장 + 그 시장의 레짐 매칭 (코스닥주는 코스닥 레짐을 봐야)
+        _reg = market_regime_for(code)
+        if _reg:
+            st.caption(
+                f"{market_label(code)} · {t('market_regime_title')}: "
+                f"{_reg['label']} {_reg.get('change', 0):+.1f}%"
+            )
         # 헤더
         hc1, hc2, hc3 = st.columns([3, 2, 2])
         with hc1:

@@ -17,6 +17,7 @@ from analyzer.recommend_view_helpers import (
     ichimoku_badge,
     ichimoku_sort_key,
     prefetch_ichimoku,
+    market_label,
 )
 
 st.set_page_config(page_title="내 종목", page_icon="📁", layout="wide")
@@ -150,6 +151,7 @@ _lbl_buy_date = t("holdings_col_buy_date")
 _lbl_note = t("holdings_col_note")
 _lbl_tags = t("watchlist_col_tags")
 _lbl_ichimoku = t("ichimoku_col")
+_lbl_market = t("col_market")
 
 _type_hold = t("mystocks_type_holding")
 _type_watch = t("mystocks_type_watch")
@@ -185,6 +187,7 @@ if filter_mode in ("all", "holdings"):
             _lbl_type: _type_hold,
             _lbl_stock: f"{h['stock_name']} ({h['stock_code']})",
             _lbl_ichimoku: ichimoku_badge(_ichi),
+            _lbl_market: market_label(h["stock_code"]),
             _lbl_sector: meta["sector"] or "-",
             _lbl_theme: themes_str or "-",
             _lbl_avg: f"{avg:,.0f}",
@@ -217,6 +220,7 @@ if filter_mode in ("all", "watchlist"):
             _lbl_type: _type_watch,
             _lbl_stock: f"{w['stock_name']} ({w['stock_code']})",
             _lbl_ichimoku: ichimoku_badge(_ichi),
+            _lbl_market: market_label(w["stock_code"]),
             _lbl_sector: meta["sector"] or "-",
             _lbl_theme: themes_str or "-",
             _lbl_avg: "-",

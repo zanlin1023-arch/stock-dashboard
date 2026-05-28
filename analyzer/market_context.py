@@ -189,6 +189,37 @@ def get_usd_krw() -> dict | None:
     return None
 
 
+_MARKET_MAP: dict | None = None
+
+
+def get_market(code: str) -> str:
+    """종목코드 → 'KOSPI' / 'KOSDAQ' / 'KONEX' / '' (krx_listing.csv, 1회 로드 캐시).
+
+    'KOSDAQ GLOBAL'은 'KOSDAQ'로 정규화. RS·레짐을 종목의 소속 시장 기준으로
+    맞추기 위한 토대 (현재 표시 라벨 + 종목별 레짐 매칭에 사용).
+    """
+    global _MARKET_MAP
+    if _MARKET_MAP is None:
+        _MARKET_MAP = {}
+        try:
+            import csv
+            from pathlib import Path
+            p = Path(__file__).resolve().parent / "data" / "krx_listing.csv"
+            with p.open(encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    mk = (row.get("Market") or "").upper()
+                    if "KOSDAQ" in mk:
+                        mk = "KOSDAQ"
+                    elif "KOSPI" in mk:
+                        mk = "KOSPI"
+                    elif "KONEX" in mk:
+                        mk = "KONEX"
+                    _MARKET_MAP[(row.get("Code") or "").zfill(6)] = mk
+        except Exception:
+            _MARKET_MAP = {}
+    return _MARKET_MAP.get((code or "").zfill(6), "")
+
+
 def get_market_regime() -> dict:
     """국내(코스피/코스닥) + 미장(S&P500/나스닥) 지수의 일목 구름 레짐.
 
