@@ -155,20 +155,51 @@ def _fetch_pykrx_index(symbol: str) -> dict | None:
         return None
 
 
+# FDR 지수 심볼 매핑
+_FDR_INDEX = {"KOSPI": "KS11", "KOSDAQ": "KQ11", "KPI200": "KS200"}
+
+
+def _fetch_fdr_index(symbol: str) -> dict | None:
+    """FDR로 지수 등락 계산 — 가장 안정적 (네이버 셀렉터 변경/KRX 차단 무관)."""
+    sym = _FDR_INDEX.get(symbol)
+    if not sym:
+        return None
+    try:
+        import FinanceDataReader as fdr
+        start = (datetime.now() - timedelta(days=10)).strftime("%Y-%m-%d")
+        df = fdr.DataReader(sym, start)
+        if df is None or df.empty or len(df) < 2:
+            return None
+        last = float(df["Close"].iloc[-1])
+        prev = float(df["Close"].iloc[-2])
+        return {
+            "value": last,
+            "change": last - prev,
+            "change_pct": (last / prev - 1) * 100 if prev else 0.0,
+        }
+    except Exception:
+        return None
+
+
 def _get_index(symbol: str) -> dict | None:
-    """네이버 우선, 실패 시 pykrx."""
+    """FDR 우선(등락 정확) → 네이버 → pykrx fallback."""
+    # 1) FDR — 등락률 가장 신뢰 가능
+    f = _fetch_fdr_index(symbol)
+    if f and f.get("change_pct") not in (0.0, None):
+        return f
+    # 2) 네이버
     v = _fetch_naver_index(symbol)
-    # 네이버에서 가져왔으나 등락 정보가 0/None이면 pykrx로 보강
     if v and (v.get("change_pct") in (0.0, None) and v.get("change") in (0.0, None)):
-        pk = _fetch_pykrx_index(symbol)
-        if pk and pk.get("change_pct"):
-            # 값은 네이버 것 유지, 등락만 pykrx
-            v["change"] = pk["change"]
-            v["change_pct"] = pk["change_pct"]
+        # 네이버 값은 있으나 등락 0 → FDR/pykrx로 등락 보강
+        for src in (f, _fetch_pykrx_index(symbol)):
+            if src and src.get("change_pct"):
+                v["change"] = src["change"]
+                v["change_pct"] = src["change_pct"]
+                break
         return v
     if v:
         return v
-    return _fetch_pykrx_index(symbol)
+    return f or _fetch_pykrx_index(symbol)
 
 
 # ────────────────────────────────────────────────

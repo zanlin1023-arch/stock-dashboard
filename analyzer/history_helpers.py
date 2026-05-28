@@ -142,11 +142,18 @@ def _render_table(records: list[dict], holdings_map: dict | None = None):
                     return f"{date_prefix}{price:,.0f} ({pct:+.1f}%)"
             return "-"
 
-        # 일목 가격 그룹 (V/N/E) → 일목 시간 사이클 그룹 (1차/2차/3차) 인접 배치
-        rows.append({
+        # 보유 평단가 + 현재가 대비 손익 (보유 페이지에서만)
+        row_dict = {
             t("hist_col_analyzed_at"): _to_kst_str(r.get("analyzed_at", ""), with_label=False),
             t("hist_col_stock"): f"{r.get('stock_name', '')} ({r.get('stock_code', '')})",
             t("hist_col_price"): f"{r['price']:,.0f}" if r.get("price") else "-",
+        }
+        if _avg:
+            # 평단가 + 분석 시점 가격 대비 손익
+            pnl = (price_now / _avg - 1) * 100 if price_now and _avg else 0
+            row_dict[t("hist_col_avg_price")] = f"{_avg:,.0f}"
+            row_dict[t("hist_col_pnl")] = f"{pnl:+.1f}%"
+        row_dict.update({
             t("hist_col_rsi"): f"{r['rsi_14']:.1f}" if r.get("rsi_14") else "-",
             t("hist_col_cloud"): {
                 "above": t("hist_cloud_above"),
@@ -166,6 +173,7 @@ def _render_table(records: list[dict], holdings_map: dict | None = None):
             t("hist_col_stop"): _fmt_target(r.get("stop_loss")),
             t("hist_col_flow"): td(flow_short),
         })
+        rows.append(row_dict)
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
