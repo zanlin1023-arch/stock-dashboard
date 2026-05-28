@@ -1,6 +1,7 @@
 """시장 컨텍스트: 지수/시장수급/섹터정합성/뉴스 — 단타용 시장 분위기 파악."""
 from __future__ import annotations
 
+import time
 import warnings
 from datetime import datetime, timedelta
 from typing import Any
@@ -286,45 +287,54 @@ def _summarize_flow_df(df: pd.DataFrame, col_foreign: str, col_inst: str, col_in
     }
 
 
-def get_daily_flow(code: str, days: int = 10) -> list[dict]:
+def get_daily_flow(code: str, days: int = 10, retries: int = 2) -> list[dict]:
     """일별 외국인/기관 매매 추이 (네이버 스크래핑).
 
     반환: 최근 N일 일별 데이터 [최신순]
     - date, close, change, volume, foreign_net (주), inst_net (주)
+
+    빈 응답(네이버 throttle 등)이면 지수 backoff로 최대 retries회 재시도.
+    대량 연속 스캔(스냅샷/추천)에서 수급 누락을 줄임.
     """
-    rows = []
-    for page in range(1, 3):
-        try:
-            r = requests.get(
-                "https://finance.naver.com/item/frgn.naver",
-                params={"code": code, "page": page},
-                headers=HEADERS, timeout=10,
-            )
-            r.encoding = r.apparent_encoding or "utf-8"
-            soup = BeautifulSoup(r.text, "html.parser")
-            for tr in soup.select("table.type2 tr"):
-                tds = tr.find_all("td")
-                if len(tds) < 9:
-                    continue
-                date_str = tds[0].get_text(strip=True)
-                if not date_str or "." not in date_str:
-                    continue
-                try:
-                    close = _parse_int_amount(tds[1].get_text(strip=True))
-                    change = tds[2].get_text(strip=True)  # "하락1,290" 또는 "상승500"
-                    foreign_net = _parse_int_amount(tds[5].get_text(strip=True))
-                    inst_net = _parse_int_amount(tds[6].get_text(strip=True))
-                    rows.append({
-                        "date": date_str,
-                        "close": close,
-                        "change_str": change,
-                        "foreign_net": foreign_net,
-                        "inst_net": inst_net,
-                    })
-                except Exception:
-                    continue
-        except Exception:
-            continue
+    rows: list[dict] = []
+    for attempt in range(retries + 1):
+        rows = []
+        for page in range(1, 3):
+            try:
+                r = requests.get(
+                    "https://finance.naver.com/item/frgn.naver",
+                    params={"code": code, "page": page},
+                    headers=HEADERS, timeout=10,
+                )
+                r.encoding = r.apparent_encoding or "utf-8"
+                soup = BeautifulSoup(r.text, "html.parser")
+                for tr in soup.select("table.type2 tr"):
+                    tds = tr.find_all("td")
+                    if len(tds) < 9:
+                        continue
+                    date_str = tds[0].get_text(strip=True)
+                    if not date_str or "." not in date_str:
+                        continue
+                    try:
+                        close = _parse_int_amount(tds[1].get_text(strip=True))
+                        change = tds[2].get_text(strip=True)  # "하락1,290" 또는 "상승500"
+                        foreign_net = _parse_int_amount(tds[5].get_text(strip=True))
+                        inst_net = _parse_int_amount(tds[6].get_text(strip=True))
+                        rows.append({
+                            "date": date_str,
+                            "close": close,
+                            "change_str": change,
+                            "foreign_net": foreign_net,
+                            "inst_net": inst_net,
+                        })
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+        if rows:
+            break
+        if attempt < retries:
+            time.sleep(0.6 * (attempt + 1))  # 0.6s → 1.2s backoff
     return rows[:days]
 
 
