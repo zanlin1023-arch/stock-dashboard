@@ -130,6 +130,7 @@ def save_analysis(
     future_path: Optional[list] = None,
     flow: Optional[dict] = None,
     pattern_match: Optional[dict] = None,
+    target_date: Optional[str] = None,  # 'YYYY-MM-DD' (None이면 오늘 — backfill용)
 ) -> dict:
     """분석 결과를 히스토리에 저장 (같은 날 같은 종목+타입은 덮어쓰기).
 
@@ -148,7 +149,7 @@ def save_analysis(
         "stock_code": stock_code,
         "stock_name": stock_name,
         "snapshot_type": snapshot_type,
-        "analyzed_date": _date.today().isoformat(),
+        "analyzed_date": target_date or _date.today().isoformat(),
         "price": _safe_num(technical.get("current_price")),
         "rsi_14": _safe_num(technical.get("rsi_14")),
         "macd": _safe_num(technical.get("macd")),
