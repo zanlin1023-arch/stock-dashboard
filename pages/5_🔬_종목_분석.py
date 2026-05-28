@@ -43,7 +43,9 @@ with st.sidebar:
 # ───────────────────────────────────────────────────────
 with st.container(border=True):
     st.markdown(f"#### 🔎 {t('search_header')}")
-    qc1, qc2, qc3, qc4 = st.columns([4, 2, 2, 2])
+    # 분석 기간은 180일(일봉) 고정 — 스윙 A/B/C는 최근 80봉으로 cap되어 기간 무관
+    days = 180
+    qc1, qc3, qc4 = st.columns([5, 2, 2])
     with qc1:
         query = st.text_input(
             t("search_input"),
@@ -51,8 +53,6 @@ with st.container(border=True):
             placeholder=t("search_placeholder"),
             label_visibility="collapsed",
         )
-    with qc2:
-        days = st.slider(t("analyze_period"), 90, 365, 180, step=30)
     with qc3:
         save_to_db = st.checkbox(
             t("save_to_db"),
