@@ -392,16 +392,51 @@ def _get_us_movers() -> list[dict]:
     return movers
 
 
+def _llm_complete(prompt: str, max_tokens: int = 400) -> str:
+    """LLM 호출 — Claude(Anthropic) 우선, 실패(크레딧 부족/오류) 시 OpenAI 폴백.
+
+    키 우선순위: ANTHROPIC_API_KEY → OPENAI_API_KEY. 둘 다 실패하면 빈 문자열.
+    """
+    import os
+    a_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if a_key:
+        try:
+            from anthropic import Anthropic
+            client = Anthropic(api_key=a_key)
+            resp = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            text = (resp.content[0].text if resp.content else "") or ""
+            if text.strip():
+                return text
+        except Exception as e:
+            print(f"[WARN] Claude 호출 실패 → OpenAI 폴백 시도: {e}")
+    o_key = os.getenv("OPENAI_API_KEY", "")
+    if o_key:
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=o_key)
+            resp = client.chat.completions.create(
+                model="gpt-4o-mini",
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return (resp.choices[0].message.content or "") if resp.choices else ""
+        except Exception as e:
+            print(f"[WARN] OpenAI 폴백도 실패: {e}")
+    return ""
+
+
 def _claude_sector_mapping(movers: list[dict]) -> dict:
-    """Claude API로 미장 강세/약세 종목 → 한국 동조 섹터 매핑.
+    """미장 강세/약세 종목 → 한국 동조 섹터 매핑 (Claude 우선 · OpenAI 폴백).
 
     Returns:
         {"strong": ["반도체", ...], "weak": ["통신서비스", ...]}
-        실패/키 없음 시 빈 dict
+        후보 없음/실패 시 빈 dict
     """
-    import os
-    api_key = os.getenv("ANTHROPIC_API_KEY", "")
-    if not api_key or not movers:
+    if not movers:
         return {}
     strong = [m for m in movers if m["change"] >= 1.5]
     weak = [m for m in movers if m["change"] <= -1.5]
@@ -421,14 +456,9 @@ def _claude_sector_mapping(movers: list[dict]) -> dict:
 
 오직 JSON만 응답: {{"strong": ["섹터1", "섹터2"], "weak": ["섹터3"]}}"""
     try:
-        from anthropic import Anthropic
-        client = Anthropic(api_key=api_key)
-        resp = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=400,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        text = resp.content[0].text if resp.content else ""
+        text = _llm_complete(prompt, max_tokens=400)
+        if not text:
+            return {}
         import json, re
         m = re.search(r"\{.*?\}", text, re.DOTALL)
         if m:
@@ -438,7 +468,7 @@ def _claude_sector_mapping(movers: list[dict]) -> dict:
                 "weak": list(data.get("weak") or [])[:5],
             }
     except Exception as e:
-        print(f"[WARN] Claude API 섹터 매핑 실패: {e}")
+        print(f"[WARN] 섹터 매핑 파싱 실패: {e}")
     return {}
 
 
@@ -448,10 +478,6 @@ def _claude_news_analysis() -> dict:
     네이버 메인 뉴스 헤드라인 → Claude Haiku가 섹터 영향 분석.
     Returns: {"strong": [...], "weak": [...]} / 키 없거나 실패 시 {}
     """
-    import os
-    api_key = os.getenv("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        return {}
     try:
         news = mc.get_market_news(limit=12) or []
         titles = [n.get("title", "") for n in news if n.get("title")]
@@ -468,14 +494,9 @@ def _claude_news_analysis() -> dict:
 - 각 최대 4개, 뉴스에 근거 없으면 빈 배열
 
 오직 JSON만: {{"strong": ["섹터1"], "weak": ["섹터2"]}}"""
-        from anthropic import Anthropic
-        client = Anthropic(api_key=api_key)
-        resp = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=400,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        text = resp.content[0].text if resp.content else ""
+        text = _llm_complete(prompt, max_tokens=400)
+        if not text:
+            return {}
         import json, re
         m = re.search(r"\{.*?\}", text, re.DOTALL)
         if m:
@@ -485,7 +506,7 @@ def _claude_news_analysis() -> dict:
                 "weak": list(data.get("weak") or [])[:4],
             }
     except Exception as e:
-        print(f"[WARN] Claude 뉴스 분석 실패: {e}")
+        print(f"[WARN] 뉴스 분석 파싱 실패: {e}")
     return {}
 
 
