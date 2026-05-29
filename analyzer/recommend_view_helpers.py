@@ -362,8 +362,6 @@ def ichimoku_badge(sig: dict) -> str:
         }.get(sig.get("stance"), "—")
     if sig.get("overheated"):
         base = f"{base} {t('ichimoku_overheated')}"
-    if sig.get("hammer"):
-        base = f"{base} {t('ichimoku_hammer')}"
     return base
 
 

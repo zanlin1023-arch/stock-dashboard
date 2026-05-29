@@ -345,25 +345,16 @@ def ichimoku_signal(df: pd.DataFrame) -> dict:
     #   활용 검토 가능(현재 미적용).
     overheated = rsi is not None and rsi >= 70
 
-    # 망치(hammer): 하락 후 긴 아래꼬리(아래꼬리≥몸통2배, 위꼬리≤몸통0.5배) — 강세반전.
-    # 캔들 패턴 백테스트(28종목·500일)에서 26봉 승률 70.5% / 평균 +12.2%로
-    # baseline(61.7% / +9.0%) 대비 유일하게 뚜렷한 강세 edge. 현재는 표시용 💡 플래그만
-    # (점수 미반영 — 유니버스 확대 재검증 + 추천 로직 재검증 통과 시 소폭 가산 검토).
-    hammer = False
-    try:
-        o_ = float(last["open"]); hi_ = float(last["high"]); lo_ = float(last["low"])
-        body = abs(price - o_)
-        b = body if body > 0 else 1e-9
-        upper = hi_ - max(o_, price)
-        lower = min(o_, price) - lo_
-        prior_decline = len(df) >= 6 and price < float(df["close"].iloc[-6])
-        hammer = lower >= 2 * b and upper <= 0.5 * b and prior_decline
-    except Exception:
-        hammer = False
-
+    # [캔들 패턴 미도입 — 백테스트 결과 기록]
+    # 망치(hammer)·유성(shooting star) 등 캔들 패턴 edge를 검증함.
+    #  - 28종목(n105): 망치 26봉 70.5% / +12.2% 로 강세 edge처럼 보였음.
+    #  - 100종목(n377)으로 확대 재검증: baseline(5봉55.3%/10봉58.1%/26봉63.5%·+11.0%) 대비
+    #    망치 5·10봉 이하, 26봉 수익 오히려 낮음(+9.6%) → edge 소멸(소표본 noise).
+    #    유성도 100종목선 약세 신호 실패. 장악·삼병·도지도 edge 없음.
+    #  → 캔들 패턴은 점수·표시 모두 미적용. (RS와 동일 결론: 작은 표본 edge는 확대 시 사라짐.)
     return {
         "stance": stance, "fresh": fresh, "cloud_pos": cloud_pos,
-        "overheated": overheated, "rsi": rsi, "hammer": hammer,
+        "overheated": overheated, "rsi": rsi,
     }
 
 
